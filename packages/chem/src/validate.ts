@@ -52,16 +52,22 @@ export function explainValence(el: string, charge: number, used: number): { titl
       message: 'Neutral carbon already has four bonds here — it has four valence electrons to share and no low-lying d orbitals, so a fifth bond isn\'t possible. Replace a bond, add the group to a neighbour, or remove an atom.',
     };
   }
+  // A charge is only offered when it genuinely makes the attempted structure valid (spec §7:
+  // never suggest a charge merely to force an arbitrary structure).
   if (el === 'O' && charge === 0) {
     return {
       title: 'Oxygen already has two bonds',
-      message: 'Neutral oxygen already has its typical two bonds and two lone pairs. Replace a bond, remove an atom, or explicitly make it O⁺ — an oxonium ion, where oxygen shares one lone pair to form a third bond (as in H₃O⁺ or a protonated alcohol).',
+      message: used === 3
+        ? 'Neutral oxygen already has its typical two bonds and two lone pairs. Replace a bond, remove an atom, or explicitly make it O⁺ — an oxonium ion, where oxygen shares one lone pair to form a third bond (as in H₃O⁺ or a protonated alcohol).'
+        : `Neutral oxygen forms two bonds and keeps two lone pairs. Even as O⁺ (an oxonium ion) it forms only three, so ${used} bonds to oxygen isn't possible. Remove bonds, or put oxygen somewhere with fewer neighbours.`,
     };
   }
   if (el === 'N' && charge === 0) {
     return {
       title: 'Nitrogen already has three bonds',
-      message: 'Neutral nitrogen forms three bonds and keeps one lone pair. A fourth bond would use that lone pair, which makes it an ammonium nitrogen (N⁺). Remove a bond, or make it N⁺ if you mean an ammonium ion.',
+      message: used === 4
+        ? 'Neutral nitrogen forms three bonds and keeps one lone pair. A fourth bond would use that lone pair, which makes it an ammonium nitrogen (N⁺). Remove a bond, or make it N⁺ if you mean an ammonium ion.'
+        : `Neutral nitrogen forms three bonds and keeps one lone pair; even as N⁺ (ammonium) it forms only four, so ${used} bonds to nitrogen isn't possible. Remove bonds or choose a different atom.`,
     };
   }
   if (el === 'H') {

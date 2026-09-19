@@ -44,6 +44,8 @@ export function NameTokens({ tokens, interactive = true, size = 'lg', emphasis }
   const focusAtoms = useMemo(() => new Set([...selection, ...(hover ? [hover] : [])]), [selection, hover]);
   const setHighlight = useStudio((s) => s.setHighlight);
   const cls = size === 'lg' ? 'text-[17px]' : size === 'md' ? 'text-[15px]' : 'text-[13px]';
+  // A step with nothing to point at in the name (e.g. no principal group) leaves the name at full strength.
+  const anyEmphasis = emphasis ? tokens.some(emphasis) : false;
   return (
     <span className={`nomen ${cls} font-medium tracking-[-0.01em]`}>
       {tokens.map((t, k) => {
@@ -51,7 +53,7 @@ export function NameTokens({ tokens, interactive = true, size = 'lg', emphasis }
         const color = tokenColor(t);
         const italic = t.role === 'stereo' && /[RSEZ]|cis|trans/.test(t.text);
         const clickable = interactive && t.atomIds.length > 0;
-        const dim = emphasis ? !emphasis(t) : false;
+        const dim = emphasis && anyEmphasis ? !emphasis(t) : false;
         return (
           <span
             key={k}

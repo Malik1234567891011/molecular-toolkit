@@ -21,7 +21,47 @@ export const displayPositions = new Map<string, THREE.Vector3>();
 export const displayOffset = new THREE.Vector3();
 
 const sphereGeo = new THREE.SphereGeometry(1, 40, 28);
-const haloGeo = new THREE.SphereGeometry(1, 24, 16);
+const haloGeo = new THREE.SphereGeometry(1, 32, 20);
+
+/**
+ * Selection/highlight halo (spec §15: "a thin animated halo, not a giant glow"): a Fresnel rim —
+ * clear over the atom, brightest at the silhouette — with a slow breathing pulse.
+ */
+function makeHaloMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uPulse: { value: 1 } },
+    vertexShader: /* glsl */ `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vColor;
+      void main() {
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+        vView = normalize(-mv.xyz);
+        #ifdef USE_INSTANCING_COLOR
+          vColor = instanceColor;
+        #else
+          vColor = vec3(1.0);
+        #endif
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uPulse;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vColor;
+      void main() {
+        float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vView)));
+        float ring = smoothstep(0.62, 0.97, rim);
+        float breathe = 1.0 - uPulse * 0.22 * (0.5 + 0.5 * sin(uTime * 2.6));
+        gl_FragColor = vec4(vColor, (0.05 + 0.95 * ring) * 0.95 * breathe);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
 const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 20, 1, false);
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpM = new THREE.Matrix4();
@@ -72,6 +112,12 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
   const hRef = useRef<THREE.InstancedMesh>(null);
   const bondRef = useRef<THREE.InstancedMesh>(null);
   const haloRef = useRef<THREE.InstancedMesh>(null);
+  const haloMaterial = useMemo(makeHaloMaterial, []);
+  useEffect(() => () => haloMaterial.dispose(), [haloMaterial]);
+  useFrame((_, dt) => {
+    haloMaterial.uniforms.uTime.value += dt;
+    haloMaterial.uniforms.uPulse.value = reduced ? 0 : 1;
+  });
   const anim = useRef<{ from: Map<string, THREE.Vector3>; to: Map<string, THREE.Vector3>; t0: number; dur: number } | null>(null);
   const dirty = useRef(true);
 
@@ -252,7 +298,7 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
         n++;
       };
       for (const at of heavy) {
-        const base = style === 'spacefill' ? at.radius * 1.04 : Math.max(at.radius * 1.55, 0.42);
+        const base = style === 'spacefill' ? at.radius * 1.06 : Math.max(at.radius * 1.32, 0.36);
         if (sel.has(at.atomId)) put(at.key, base, HALO_TONES.accent);
         else if (measureSet.has(at.atomId)) put(at.key, base, HALO_TONES.amber);
         else if (highlightColorOf.has(at.atomId)) put(at.key, base, highlightColorOf.get(at.atomId)!);
@@ -261,7 +307,7 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
       // Hydrogens are highlighted by their conformer key (e.g. an acidic proton "a3.h1").
       for (const at of hydrogens) {
         const c = highlightColorOf.get(at.key);
-        if (c) put(at.key, style === 'spacefill' ? at.radius * 1.04 : Math.max(at.radius * 1.7, 0.36), c);
+        if (c) put(at.key, style === 'spacefill' ? at.radius * 1.06 : Math.max(at.radius * 1.45, 0.3), c);
       }
       haloMesh.count = n;
       haloMesh.instanceMatrix.needsUpdate = true;
@@ -323,9 +369,7 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
       <instancedMesh key={`b${bondCap}`} ref={bondRef} args={[cylGeo, undefined, bondCap]} onPointerDown={pickBond} onPointerMove={(e) => { if (e.instanceId !== undefined && !ghost) { e.stopPropagation(); handlers.onBondOver?.(bondInstances[e.instanceId]?.bond ?? null); } }} onPointerOut={() => handlers.onBondOver?.(null)} frustumCulled={false}>
         <meshPhysicalMaterial roughness={0.42} metalness={0} clearcoat={0.35} clearcoatRoughness={0.3} transparent={ghost} opacity={ghost ? 0.35 : 1} />
       </instancedMesh>
-      <instancedMesh key={`g${haloCap}`} ref={haloRef} args={[haloGeo, undefined, haloCap]} frustumCulled={false} renderOrder={2} raycast={() => null}>
-        <meshBasicMaterial transparent opacity={0.28} depthWrite={false} side={THREE.FrontSide} toneMapped={false} />
-      </instancedMesh>
+      <instancedMesh key={`g${haloCap}`} ref={haloRef} args={[haloGeo, haloMaterial, haloCap]} frustumCulled={false} renderOrder={2} raycast={() => null} />
     </group>
   );
 }

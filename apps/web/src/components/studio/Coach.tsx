@@ -44,14 +44,19 @@ export function Coach() {
   }
   const name = verification?.primary?.name;
   const carbons = doc.atoms.filter((a) => a.element === 'C').length;
+  const finish = () => {
+    setStage('done');
+    useStudio.getState().setSettings({ tourSeen: true });
+  };
   return (
-    <div className="absolute left-1/2 top-16 z-20 w-[380px] max-w-[92vw] -translate-x-1/2" data-testid="coach-success">
+    <div className="absolute left-1/2 top-16 z-20 w-[380px] max-w-[92vw] -translate-x-1/2 md:left-4 md:translate-x-0" data-testid="coach-success">
       <div className="glass fade-up rounded-2xl p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="text-[15px] font-semibold">
-            You built {name ? <span className="nomen">{name}</span> : 'your first molecule'}.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-semibold">
+            <span>You built {name ? <span className="nomen">{name}</span> : 'your first molecule'}.</span>
+            {name && verification?.primary && <ProvenanceBadge p={verification.primary.provenance} />}
           </div>
-          <button onClick={() => { setStage('done'); useStudio.getState().setSettings({ tourSeen: true }); }} aria-label="Close" className="text-text-3 hover:text-text">
+          <button onClick={finish} aria-label="Close" className="text-text-3 hover:text-text">
             <I.X size={16} />
           </button>
         </div>
@@ -59,10 +64,10 @@ export function Coach() {
           {carbons ? 'Carbon forms four bonds here; hidden hydrogens fill the rest.' : 'Each atom keeps its typical number of bonds; hydrogens fill the rest.'} The molecule relaxed to its lowest-energy shape.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={() => { useStudio.setState({ panel: 'explain', explainStep: 0 }); }} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink">
-            Name it {name && verification?.primary && <ProvenanceBadge p={verification.primary.provenance} compact />}
+          <button onClick={() => { useStudio.setState({ panel: 'explain', explainStep: 0 }); finish(); }} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink">
+            <I.Lightbulb size={15} /> Name it
           </button>
-          <button onClick={() => bus.emit('open:ar')} className="flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-[13px] font-medium">
+          <button onClick={() => { bus.emit('open:ar'); finish(); }} className="flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-[13px] font-medium">
             <I.AR size={15} /> See it on your desk
           </button>
         </div>
