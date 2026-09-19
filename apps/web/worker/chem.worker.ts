@@ -6,6 +6,7 @@
  * - OpenChemLib (BSD-3): 3D conformers and MMFF94s+ relaxation / single-point energies.
  */
 import * as OCL from 'openchemlib';
+import { isosurface, type Grid } from './isosurface';
 import {
   computeFormula, detectFunctionalGroups, summarizeGroups, validateDocument, perceiveStereo, stereoMismatches, writeSmiles, writeMolfileV2000,
   parseMolfile, parseSmiles, MolView, localGeometry, placeHydrogens, rotateFragment, sideOfBond, alignTo, wedgesFromStereo,
@@ -354,6 +355,21 @@ self.onmessage = async (ev: MessageEvent<Req>) => {
       case 'mcs':
         result = mcsHighlight(args.docs as MoleculeDocument[]);
         break;
+      case 'isosurface': {
+        const g = args.grid as Grid;
+        let values = g.values instanceof Float32Array ? g.values : new Float32Array(g.values);
+        let iso = args.iso as number;
+        if (args.log) {
+          // Densities decay exponentially: interpolating ln ρ places vertices far more accurately.
+          const lv = new Float32Array(values.length);
+          for (let i = 0; i < values.length; i++) lv[i] = Math.log(Math.max(values[i], 1e-12));
+          values = lv;
+          iso = Math.log(iso);
+        }
+        const r = isosurface({ ...g, values }, iso, (args.sign as number) ?? 1);
+        result = r;
+        break;
+      }
       case 'inchikey':
         result = inchiKeyOfSmiles(args.smiles as string);
         break;

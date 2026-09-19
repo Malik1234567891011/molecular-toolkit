@@ -17,6 +17,7 @@ import { Overlays } from './Overlays';
 import { RotationHandle } from './RotationHandle';
 import { MiniPalette, type PaletteRequest } from './MiniPalette';
 import { GeometryGuides } from './GeometryGuides';
+import { OrbitalSurfaces } from './OrbitalSurfaces';
 
 interface DragState {
   kind: 'port' | 'atom';
@@ -289,6 +290,7 @@ function Scene() {
       <MoleculeMesh handlers={handlers} />
       <GeometryGuides />
       <Overlays />
+      <OrbitalSurfaces />
       {mode === 'conformer' && <RotationHandle onInteract={setInteracting} />}
       {drag && dragPoint && <DragGhost from={drag.parent} to={dragPoint} />}
       {doc.atoms.length > 0 && <group userData={{ noExport: true }}><ContactShadows position={[0, bottom, 0]} opacity={theme === 'dark' ? 0.55 : 0.32} scale={30} blur={2.8} far={14} resolution={512} color={theme === 'dark' ? '#000000' : '#3a3550'} frames={reduced ? 1 : Infinity} /></group>}
