@@ -7,11 +7,12 @@ import {
 import { useStudio, studio } from '@/lib/store';
 import { cycleBondOrder, setBondOrder, setElement } from '@/lib/edit';
 import { computeScan, currentDihedral, rotateBond } from '@/lib/conformer';
-import { scheduleAnalysis } from '@/lib/pipeline';
+import { relaxCurrent, scheduleAnalysis } from '@/lib/pipeline';
 import { I } from '../ui/icons';
 import { Newman, conformationName } from './Newman';
 import { EnergyCurve } from './EnergyCurve';
 import { ProvenanceBadge } from '../naming/ProvenanceBadge';
+import { ConformerFilmstrip } from './Conformers';
 
 function Row({ k, v, mono, title }: { k: string; v: React.ReactNode; mono?: boolean; title?: string }) {
   return (
@@ -235,7 +236,13 @@ function FactsCard() {
         </ul>
       </Section>
       <Section title="3D model">
-        <Row k="Geometry" v={geometry === 'relaxing' ? 'relaxing…' : geometry === 'idealized' ? 'idealized (relaxing soon)' : geometry === 'failed' ? 'failed' : 'optimized'} />
+        <Row
+          k="Geometry"
+          v={geometry === 'relaxing' ? 'relaxing…' : geometry === 'idealized' ? 'idealized (relaxing soon)' : geometry === 'failed' ? 'failed' : conf?.converged === false ? 'not minimized' : 'optimized'}
+        />
+        {geometry === 'relaxed' && conf?.converged === false && (
+          <button onClick={() => relaxCurrent()} className="mt-1 text-[12px] text-accent-strong hover:underline">Relax to the nearest minimum</button>
+        )}
         {conf && <p className="mt-1 text-[11.5px] leading-snug text-text-3">{conf.method}{conf.converged === false ? ' · not converged' : ''}. Model geometry, gas phase — not an experimental structure.</p>}
       </Section>
       <Section title="Identifiers" right={<button className="text-[11px] text-text-3 hover:text-text" onClick={() => setAdv((x) => !x)}>{adv ? 'hide' : 'advanced'}</button>}>
@@ -454,9 +461,12 @@ export function ConformerPanel() {
   const live = useStudio((s) => s.liveEnergy);
   if (!bondId) {
     return (
+      <>
       <Section title="Conformer mode">
         <p className="text-[12.5px] leading-snug text-text-2">Click a single (non-ring) bond to rotate it. Drag the ring handle; the Newman projection and the energy curve follow live. Identity and name never change when you rotate.</p>
       </Section>
+      <ConformerFilmstrip />
+      </>
     );
   }
   const dih = scan && scan.bondId === bondId ? currentDihedral(scan.dihedral) : null;
@@ -493,6 +503,7 @@ export function ConformerPanel() {
       <Section title="Identity">
         <p className="text-[12.5px] text-text-2">Rotating a single bond changes the <i>conformer</i>, not the molecule — the graph, stereodescriptors and name stay the same.</p>
       </Section>
+      <ConformerFilmstrip />
     </>
   );
 }

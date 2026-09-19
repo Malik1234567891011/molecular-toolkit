@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { useStudio, studio, type Mode3D, type RenderStyle } from '@/lib/store';
 import { bus } from '@/lib/events';
-import { cleanLayout, freshGeometry } from '@/lib/pipeline';
+import { cleanLayout, relaxCurrent } from '@/lib/pipeline';
 import { usePracticeHidesName } from '@/lib/practice';
 import { RoomCursors } from './RoomCursors';
 import { I } from '../ui/icons';
@@ -59,7 +59,7 @@ function Toolbar3D() {
       <ToolButton onClick={() => bus.emit('fit')} title="Center & fit (Space)">
         <I.Focus size={15} />
       </ToolButton>
-      <ToolButton onClick={() => void freshGeometry(studio().doc, studio().version)} title="Relax: regenerate and minimize the geometry">
+      <ToolButton onClick={() => relaxCurrent()} title="Relax: minimize from the current shape (force field)">
         <I.Sparkle size={15} /> <span className="hidden md:inline">{geometry === 'relaxing' ? 'Relaxing…' : 'Relax'}</span>
       </ToolButton>
     </div>

@@ -67,6 +67,12 @@ function stripForWorker(doc: MoleculeDocument): MoleculeDocument {
   return { ...doc, conformers: [], provenance: [] };
 }
 
+/** Minimize from the geometry on screen (spec §7 "Relax minimizes") — keeps the student's conformer. */
+export function relaxCurrent(): void {
+  clearTimeout(relaxTimer);
+  void runRelax();
+}
+
 function scheduleRelax(): void {
   clearTimeout(relaxTimer);
   relaxTimer = setTimeout(runRelax, 260);

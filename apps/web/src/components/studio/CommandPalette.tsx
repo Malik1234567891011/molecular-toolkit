@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStudio, studio, type RenderStyle, type SidePanel } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { resolveQuery, clearMolecule } from '@/lib/actions';
-import { cleanLayout, freshGeometry } from '@/lib/pipeline';
+import { cleanLayout, freshGeometry, relaxCurrent } from '@/lib/pipeline';
 import { attachSmiles } from '@/lib/edit';
 import { I } from '../ui/icons';
 
@@ -48,7 +48,9 @@ const COMMANDS: Command[] = [
   { id: 'flip', label: 'Flip stereocentre (R ↔ S)', keywords: 'invert stereocenter flip r s configuration', group: 'Molecule', when: () => !!selectedCentre(), run: () => { const c = selectedCentre(); if (c) studio().apply({ type: 'invertCentres', atomIds: [c] }, { label: 'Flip stereocentre' }); } },
   { id: 'mirror', label: 'Make the mirror image', keywords: 'enantiomer mirror reflect', group: 'Molecule', when: hasMol, run: () => { studio().apply({ type: 'mirror' }, { label: 'Mirror image' }); } },
   { id: 'add-oh', label: 'Add OH to the selected atom', keywords: 'hydroxyl alcohol add water oh', group: 'Molecule', when: () => studio().selection.atoms.length === 1, run: () => void attachSmiles(studio().selection.atoms[0], 'O') },
-  { id: 'relax', label: 'Minimize geometry (relax)', keywords: 'minimize relax optimize mmff energy', group: 'Molecule', when: hasMol, run: () => void freshGeometry(studio().doc, studio().version) },
+  { id: 'relax', label: 'Minimize geometry (relax)', keywords: 'minimize relax optimize mmff energy', group: 'Molecule', when: hasMol, run: () => relaxCurrent() },
+  { id: 'regenerate', label: 'Regenerate 3D geometry from scratch', keywords: 'new conformer regenerate embed fresh 3d', group: 'Molecule', when: hasMol, run: () => void freshGeometry(studio().doc, studio().version) },
+  { id: 'conformers', label: 'Find low-energy conformers', keywords: 'conformers filmstrip search low energy shapes', group: 'Molecule', when: hasMol, run: () => useStudio.setState({ mode3d: 'conformer', view: studio().view === '2d' ? '3d' : studio().view, panel: 'facts' }) },
   { id: 'clean', label: 'Clean up the 2D drawing', keywords: 'clean layout tidy 2d', group: 'Molecule', when: hasMol, run: () => void cleanLayout() },
   { id: 'clear', label: 'New molecule (clear canvas)', keywords: 'new clear empty reset', group: 'Molecule', run: () => clearMolecule() },
   { id: 'scan', label: 'Scan a structure from a photo', keywords: 'scan photo camera image ocr handwritten', group: 'Molecule', run: () => bus.emit('open:scan') },

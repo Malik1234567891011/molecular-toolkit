@@ -231,6 +231,30 @@ function freshConformer(doc: MoleculeDocument, previous?: Record<string, Vec3>, 
   return valid.reduce((a, b) => (b.energy < a.energy - 1e-6 ? b : a));
 }
 
+/** Read an OpenChemLib conformer (SMILES atom order, explicit H last) into document-keyed coordinates. */
+function coordsFromOcl(doc: MoleculeDocument, order: string[], conf: OCL.Molecule): Record<string, Vec3> {
+  const coords: Record<string, Vec3> = {};
+  const heavy = order.length;
+  // Heavy atoms keep SMILES order; hydrogens follow, each bonded to its parent.
+  for (let i = 0; i < heavy; i++) coords[order[i]] = [conf.getAtomX(i), conf.getAtomY(i), conf.getAtomZ(i)];
+  const hCount = new Map<string, number>();
+  for (let i = heavy; i < conf.getAllAtoms(); i++) {
+    if (conf.getAtomicNo(i) !== 1) continue;
+    const parent = conf.getConnAtom(i, 0);
+    if (parent < 0 || parent >= heavy) continue;
+    const pid = order[parent];
+    const n = (hCount.get(pid) ?? 0) + 1;
+    hCount.set(pid, n);
+    coords[`${pid}.h${n}`] = [conf.getAtomX(i), conf.getAtomY(i), conf.getAtomZ(i)];
+  }
+  // Sanity: element sequence must match (OCL keeps SMILES atom order).
+  for (let i = 0; i < heavy; i++) {
+    const a = doc.atoms.find((x) => x.id === order[i])!;
+    if (OCL.Molecule.getAtomicNoFromLabel(a.element) !== conf.getAtomicNo(i)) throw new Error('Atom order mismatch between SMILES and conformer');
+  }
+  return coords;
+}
+
 function freshConformerOnce(doc: MoleculeDocument, previous: Record<string, Vec3> | undefined, seed: number): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
   const w = writeSmiles(doc);
   const mol = OCL.Molecule.fromSmiles(w.smiles);
@@ -241,30 +265,65 @@ function freshConformerOnce(doc: MoleculeDocument, previous: Record<string, Vec3
   if (!conf) throw new Error('No conformer could be generated');
   const ff = new OCL.ForceFieldMMFF94(conf, OCL.ForceFieldMMFF94.MMFF94SPLUS, {});
   const code = ff.minimise({ maxIts: 2000 });
-  const coords: Record<string, Vec3> = {};
-  const heavy = w.order.length;
-  // Heavy atoms keep SMILES order; hydrogens follow, each bonded to its parent.
-  for (let i = 0; i < conf.getAllAtoms(); i++) {
-    const p: Vec3 = [conf.getAtomX(i), conf.getAtomY(i), conf.getAtomZ(i)];
-    if (i < heavy) coords[w.order[i]] = p;
-  }
-  const hCount = new Map<string, number>();
-  for (let i = heavy; i < conf.getAllAtoms(); i++) {
-    if (conf.getAtomicNo(i) !== 1) continue;
-    const parent = conf.getConnAtom(i, 0);
-    if (parent < 0 || parent >= heavy) continue;
-    const pid = w.order[parent];
-    const n = (hCount.get(pid) ?? 0) + 1;
-    hCount.set(pid, n);
-    coords[`${pid}.h${n}`] = [conf.getAtomX(i), conf.getAtomY(i), conf.getAtomZ(i)];
-  }
-  // Sanity: element sequence must match (OCL keeps SMILES atom order).
-  for (let i = 0; i < heavy; i++) {
-    const a = doc.atoms.find((x) => x.id === w.order[i])!;
-    if (OCL.Molecule.getAtomicNoFromLabel(a.element) !== conf.getAtomicNo(i)) throw new Error('Atom order mismatch between SMILES and conformer');
-  }
+  const coords = coordsFromOcl(doc, w.order, conf);
   const aligned = previous ? alignTo(coords, previous) : coords;
   return { coords: aligned, energy: ff.getTotalEnergy(), converged: code === 0, method: 'OpenChemLib conformer generator + MMFF94s+, gas phase' };
+}
+
+/**
+ * Low-energy conformer candidates (spec §7 "Conformers"): distinct torsion sets enumerated from
+ * most to least likely, each MMFF-minimized, filtered to the stored stereochemistry,
+ * de-duplicated, sorted by energy and aligned onto the current geometry so switching between
+ * them does not jump the view.
+ */
+function ensemble(doc: MoleculeDocument, current: Record<string, Vec3> | undefined, count = 8) {
+  const w = writeSmiles(doc);
+  const mol = OCL.Molecule.fromSmiles(w.smiles);
+  mol.addImplicitHydrogens();
+  mol.ensureHelperArrays(OCL.Molecule.cHelperNeighbours);
+  const gen = new OCL.ConformerGenerator(42);
+  if (!gen.initializeConformers(mol, { strategy: OCL.ConformerGenerator.STRATEGY_LIKELY_SYSTEMATIC, maxTorsionSets: 200 })) {
+    throw new Error('Conformer search could not start for this structure');
+  }
+  const budget = doc.atoms.length > 40 ? 8 : 30;
+  const heavy = doc.atoms.map((a) => a.id);
+  const rmsd = (p: Record<string, Vec3>, q: Record<string, Vec3>) => {
+    let sum = 0;
+    for (const id of heavy) {
+      const a = p[id];
+      const b = q[id];
+      sum += (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    }
+    return Math.sqrt(sum / heavy.length);
+  };
+  const found: Array<{ coords: Record<string, Vec3>; energy: number; converged: boolean; method: string }> = [];
+  for (let n = 0; n < budget; n++) {
+    const conf = gen.getNextConformerAsMolecule();
+    if (!conf) break;
+    const ff = new OCL.ForceFieldMMFF94(conf, OCL.ForceFieldMMFF94.MMFF94SPLUS, {});
+    const code = ff.minimise({ maxIts: 2000 });
+    let coords: Record<string, Vec3>;
+    try {
+      coords = coordsFromOcl(doc, w.order, conf);
+    } catch {
+      continue;
+    }
+    if (current) coords = alignTo(coords, current);
+    const wrong = stereoMismatches(doc, coords);
+    if (wrong.centres.length || wrong.bonds.length) continue;
+    const e = ff.getTotalEnergy();
+    if (found.some((f) => Math.abs(f.energy - e) < 0.15 && rmsd(f.coords, coords) < 0.4)) continue;
+    found.push({ coords, energy: e, converged: code === 0, method: 'OpenChemLib torsion enumeration + MMFF94s+, gas phase' });
+  }
+  if (!found.length) throw new Error('no conformer matched the stored stereochemistry');
+  found.sort((a, b) => a.energy - b.energy);
+  const kept = found.slice(0, count);
+  const e0 = kept[0].energy;
+  return {
+    conformers: kept.map((c) => ({ ...c, relative: c.energy - e0 })),
+    currentRelative: current ? energy(doc, current) - e0 : null,
+    method: 'OpenChemLib torsion enumeration + MMFF94s+ minimization, gas phase',
+  };
 }
 
 function scan(doc: MoleculeDocument, coords: Record<string, Vec3>, dihedral: [string, string, string, string], step = 10) {
@@ -345,6 +404,9 @@ self.onmessage = async (ev: MessageEvent<Req>) => {
         break;
       case 'fresh':
         result = freshConformer(args.doc as MoleculeDocument, args.previous as Record<string, Vec3> | undefined, args.seed as number | undefined);
+        break;
+      case 'ensemble':
+        result = ensemble(args.doc as MoleculeDocument, args.current as Record<string, Vec3> | undefined, (args.count as number) ?? 8);
         break;
       case 'energy':
         result = energy(args.doc as MoleculeDocument, args.coords as Record<string, Vec3>);
