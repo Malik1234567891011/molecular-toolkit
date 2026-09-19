@@ -39,6 +39,14 @@ export function Landing() {
       <div className="relative z-10 -mt-2 w-full max-w-[680px] text-center">
         <h1 className="text-[34px] font-semibold tracking-[-0.03em] sm:text-[44px]">Build or find any molecule</h1>
         <p className="mt-2 text-[16px] text-text-2">Type a name, draw it, scan it, or start with an atom.</p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+          <button onClick={() => bus.emit('open:guide')} className="inline-flex items-center gap-1.5 rounded-full border border-accent/50 bg-accent-soft px-3.5 py-1.5 text-[13px] font-semibold text-accent-strong transition hover:bg-accent hover:text-accent-ink" data-testid="open-guide">
+            <I.Book size={15} /> New here? See how Orbital works
+          </button>
+          <button onClick={startTour} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] text-text-2 hover:bg-accent-soft hover:text-accent-strong" data-testid="start-tour">
+            <I.Sparkle size={14} /> or take the 60-second tour
+          </button>
+        </div>
         <div className="mt-6">
           {typing ? (
             <SearchBox big autoFocus />
@@ -74,9 +82,6 @@ export function Landing() {
             Back to my molecule
           </button>
         )}
-        <button onClick={startTour} className="mt-5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] text-accent-strong hover:bg-accent-soft" data-testid="start-tour">
-          <I.Sparkle size={14} /> New here? Take the 60-second tour
-        </button>
         <p className="mt-6 text-[11.5px] text-text-3">No account needed · your work saves on this device · free</p>
       </div>
     </div>

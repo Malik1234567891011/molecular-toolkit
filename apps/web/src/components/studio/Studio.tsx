@@ -21,6 +21,7 @@ import { ShareDialog } from './ShareDialog';
 import { CommandPalette } from './CommandPalette';
 import { ScanDialog } from './ScanDialog';
 import { Tour } from './Tour';
+import { Guide } from './Guide';
 import { Narrator } from './Narrator';
 import { ShortcutHelp } from './ShortcutHelp';
 import { BottomSheet, PEEK } from './BottomSheet';
@@ -140,6 +141,7 @@ export function Studio() {
       <CommandPalette />
       <ScanDialog />
       <Tour />
+      <Guide />
       <Narrator />
       <ShortcutHelp />
     </div>

@@ -97,6 +97,7 @@ function MoreMenu() {
     { label: 'Study room', icon: <I.Users size={15} />, run: () => useStudio.setState({ panel: 'room', landing: false }), active: panel === 'room' },
     { label: 'Scan a structure', icon: <I.Scan size={15} />, run: () => bus.emit('open:scan') },
     { label: 'All commands', icon: <I.Search size={15} />, run: () => useStudio.setState({ paletteOpen: true }), kbd: '⌘K' },
+    { label: 'How Orbital works', icon: <I.Info size={15} />, run: () => bus.emit('open:guide') },
     ...(mobile ? [{ label: 'Settings', icon: <I.Settings size={15} />, run: go('settings'), active: panel === 'settings' }] : []),
   ];
   const anyActive = items.some((i) => i.active);
@@ -180,6 +181,10 @@ export function TopBar() {
         <MoreMenu />
       </nav>
       <div className="flex items-center gap-1">
+        <button onClick={() => bus.emit('open:guide')} className="hidden items-center gap-1 rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text md:flex" title="How Orbital works" aria-label="How Orbital works" data-testid="topbar-guide">
+          <I.Info size={17} />
+          <span className="hidden text-[12.5px] font-medium 2xl:inline">Guide</span>
+        </button>
         <button onClick={() => bus.emit('open:share')} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text" title="Share / export / AR" aria-label="Share, export or view in AR">
           <I.Share size={17} />
         </button>

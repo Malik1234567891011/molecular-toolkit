@@ -9,6 +9,9 @@ const config: NextConfig = {
   async rewrites() {
     return [{ source: '/api/v1/:path*', destination: `${API}/v1/:path*` }];
   },
+  async redirects() {
+    return [{ source: '/guide', destination: '/?guide', permanent: false }];
+  },
   async headers() {
     return [
       { source: '/rdkit/:file*', headers: [{ key: 'Cache-Control', value: 'public, max-age=604800' }] },

@@ -215,6 +215,39 @@ test('mobile: dock and three-height sheet, no sideways scroll', async (page) => 
   await waitState(page, () => document.querySelector('[data-testid=bottom-sheet]')?.getAttribute('data-snap') === 'half');
 });
 
+test('guide: opens from the start screen, every Try it does its thing', async (page) => {
+  await openStudio(page);
+  await page.click('[data-testid=open-guide]');
+  await page.waitForSelector('[data-testid=guide]');
+  assert(new URL(page.url()).searchParams.has('guide'), 'guide is linkable (?guide)');
+  const items = await page.$$eval('[data-testid^=guide-item-]', (els) => els.length);
+  assert(items >= 20, `only ${items} guide items`);
+  // Explain: loads the example and opens the explain panel.
+  await page.click('[data-testid=guide-try-explain]');
+  await waitState(page, () => !document.querySelector('[data-testid=guide]'));
+  await waitState(page, () => window.__orbital.getState().panel === 'explain' && window.__orbital.getState().doc.atoms.length === 9);
+  assert(!new URL(page.url()).searchParams.has('guide'), 'closing drops ?guide');
+  // Reopen from the top bar; the chair example lands in the projection lab.
+  await page.click('[data-testid=topbar-guide]');
+  await page.click('[data-testid=guide-try-projections]');
+  await waitState(page, () => window.__orbital.getState().panel === 'projection' && window.__orbital.getState().doc.atoms.length === 6);
+  // Conformer mode on butane.
+  await page.click('[data-testid=topbar-guide]');
+  await page.click('[data-testid=guide-try-toolbar]');
+  await waitState(page, () => window.__orbital.getState().mode3d === 'conformer' && window.__orbital.getState().doc.atoms.length === 4);
+  // Panels without a molecule change: practice and rooms.
+  for (const [id, panel] of [['problems', 'practice'], ['room', 'room'], ['settings', 'settings']]) {
+    await page.click('[data-testid=topbar-guide]');
+    await page.click(`[data-testid=guide-try-${id}]`);
+    await waitState(page, (p) => window.__orbital.getState().panel === p, panel);
+  }
+  // A /guide link opens straight into it, and Escape closes it.
+  await page.goto(BASE + '/guide');
+  await page.waitForSelector('[data-testid=guide]');
+  await page.keyboard.press('Escape');
+  await waitState(page, () => !document.querySelector('[data-testid=guide]'));
+});
+
 test('tour: completes step by step', async (page) => {
   await openStudio(page);
   await page.click('[data-testid=start-tour]');

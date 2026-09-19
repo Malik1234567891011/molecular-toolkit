@@ -42,6 +42,7 @@ const COMMANDS: Command[] = [
   { id: 'newman', label: 'Newman projection of a bond', keywords: 'newman sawhorse conformation rotate bond', group: 'Learn', when: hasMol, run: panel('projection') },
   { id: 'fischer', label: 'Fischer projection', keywords: 'fischer wedge dash projection', group: 'Learn', when: hasMol, run: panel('projection') },
   { id: 'mechanism', label: 'Play a reaction mechanism (SN2, E2, …)', keywords: 'mechanism sn2 sn1 e2 e1 arrows curved diels alder', group: 'Learn', run: panel('mechanism') },
+  { id: 'guide', label: 'How Orbital works (guide to every feature)', keywords: 'guide help how to manual instructions features learn what can', group: 'Learn', run: () => bus.emit('open:guide') },
   { id: 'tour', label: 'Take the 60-second tour', keywords: 'tour help onboarding tutorial start learn basics', group: 'Learn', run: () => void import('@/lib/tour').then((t) => t.startTour()) },
   { id: 'resonance', label: 'Show resonance contributors', keywords: 'resonance contributor delocalized hybrid curved arrows major minor', group: 'Learn', when: hasMol, run: panel('resonance') },
   { id: 'homo', label: 'Show HOMO / LUMO / ESP', keywords: 'orbital homo lumo esp electrostatic density quantum', group: 'Learn', when: hasMol, run: panel('orbitals') },
