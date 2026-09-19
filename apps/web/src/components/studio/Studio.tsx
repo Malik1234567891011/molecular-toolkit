@@ -20,6 +20,8 @@ import { ShareDialog } from './ShareDialog';
 import { CommandPalette } from './CommandPalette';
 import { ScanDialog } from './ScanDialog';
 import { Tour } from './Tour';
+import { Narrator } from './Narrator';
+import { ShortcutHelp } from './ShortcutHelp';
 import { BottomSheet, PEEK } from './BottomSheet';
 import { watchVerifiedChime } from '@/lib/sound';
 
@@ -134,6 +136,8 @@ export function Studio() {
       <CommandPalette />
       <ScanDialog />
       <Tour />
+      <Narrator />
+      <ShortcutHelp />
     </div>
   );
 }

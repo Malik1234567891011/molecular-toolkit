@@ -148,7 +148,15 @@ export function CanvasArea() {
     };
   }, []);
   return (
-    <div ref={box} className="canvas-bg relative flex min-h-0 min-w-0 flex-1" data-testid="canvas-area">
+    <div
+      ref={box}
+      className="canvas-bg relative flex min-h-0 min-w-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/70"
+      data-testid="canvas-area"
+      tabIndex={0}
+      role="application"
+      aria-roledescription="molecule canvas"
+      aria-label="Molecule canvas. Arrow keys move between atoms, Enter bonds a new atom, 1 2 3 set bond order, Delete removes, question mark lists every shortcut."
+    >
       {(view === '2d' || view === 'split') && (
         <div className="relative h-full min-w-0 shrink-0 overflow-hidden" style={{ width: view === 'split' ? `${split * 100}%` : '100%' }}>
           <Canvas2D />

@@ -14,7 +14,7 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #e7e9ef;
   --text-2: #a3abba;
-  --text-3: #6d7586;
+  --text-3: #7f8695;
   --accent: #8b7cff;
   --accent-strong: #a597ff;
   --accent-soft: rgba(139, 124, 255, 0.16);
@@ -48,16 +48,16 @@
   --border-strong: rgba(20, 20, 35, 0.16);
   --text: #16181d;
   --text-2: #4e5462;
-  --text-3: #858a96;
+  --text-3: #6a6e78;
   --accent: #5a48f0;
   --accent-strong: #4332d6;
   --accent-soft: rgba(90, 72, 240, 0.1);
   --accent-ink: #ffffff;
-  --amber: #b77200;
+  --amber: #9c6100;
   --amber-soft: rgba(242, 179, 76, 0.2);
-  --danger: #d8263a;
+  --danger: #d42539;
   --danger-soft: rgba(216, 38, 58, 0.1);
-  --good: #0f9a62;
+  --good: #0c7e50;
   --good-soft: rgba(15, 154, 98, 0.1);
   --focus: 0 0 0 2px rgba(90, 72, 240, 0.5);
   --shadow: 0 10px 40px -16px rgba(30, 30, 50, 0.25), 0 2px 8px rgba(30, 30, 50, 0.08);
@@ -83,16 +83,16 @@
     --border-strong: rgba(20, 20, 35, 0.16);
     --text: #16181d;
     --text-2: #4e5462;
-    --text-3: #858a96;
+    --text-3: #6a6e78;
     --accent: #5a48f0;
     --accent-strong: #4332d6;
     --accent-soft: rgba(90, 72, 240, 0.1);
     --accent-ink: #ffffff;
-    --amber: #b77200;
+    --amber: #9c6100;
     --amber-soft: rgba(242, 179, 76, 0.2);
-    --danger: #d8263a;
+    --danger: #d42539;
     --danger-soft: rgba(216, 38, 58, 0.1);
-    --good: #0f9a62;
+    --good: #0c7e50;
     --good-soft: rgba(15, 154, 98, 0.1);
     --canvas-grad: radial-gradient(1200px 800px at 50% 40%, #ffffff 0%, #f8f6f1 50%, #f1efe8 100%);
     --grid-line: rgba(20, 20, 35, 0.045);
@@ -242,4 +242,12 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Touch targets: 44×44 px on coarse pointers (spec §15). */
+@media (pointer: coarse) {
+  [data-testid='mobile-dock'] button {
+    width: 44px;
+    height: 44px;
+  }
 }
