@@ -1,0 +1,9 @@
+# Keep secrets and local state out of the image: the hosted API reads its key from Vercel env vars.
+.env
+.env.*
+.venv
+data
+__pycache__
+*.pyc
+opsin/*.jar
+opsin/classes

@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from . import config, db
+from . import config, store
 
 _client: httpx.AsyncClient | None = None
 _bucket_lock = asyncio.Lock()
@@ -79,7 +79,7 @@ async def properties_for_cids(cids: list[int]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     missing: list[int] = []
     for cid in cids:
-        hit = db.cache_get(f"pc:cid:{cid}", 30 * DAY)
+        hit = store.cache_get(f"pc:cid:{cid}", 30 * DAY)
         if hit:
             out.append(hit)
         else:
@@ -96,7 +96,7 @@ async def properties_for_cids(cids: list[int]) -> list[dict[str, Any]]:
                 "title": p.get("Title"),
                 "molarMass": float(p["MolecularWeight"]) if p.get("MolecularWeight") else None,
             }
-            db.cache_put(f"pc:cid:{rec['cid']}", rec)
+            store.cache_put(f"pc:cid:{rec['cid']}", rec)
             out.append(rec)
     order = {c: i for i, c in enumerate(cids)}
     return sorted(out, key=lambda r: order.get(r["cid"], 1e9))
@@ -104,51 +104,51 @@ async def properties_for_cids(cids: list[int]) -> list[dict[str, Any]]:
 
 async def cids_for_name(name: str) -> list[int]:
     key = f"pc:name:{name.strip().lower()}"
-    hit = db.cache_get(key, DAY)
+    hit = store.cache_get(key, DAY)
     if hit is not None:
         return hit
     data = await _get_json(f"pug/compound/name/{q(name)}/cids/JSON")
     cids = (data or {}).get("IdentifierList", {}).get("CID", [])[:5]
-    db.cache_put(key, cids)
+    store.cache_put(key, cids)
     return cids
 
 
 async def cids_for_inchikey(key: str) -> list[int]:
     ck = f"pc:ik:{key}"
-    hit = db.cache_get(ck, 30 * DAY)
+    hit = store.cache_get(ck, 30 * DAY)
     if hit is not None:
         return hit
     data = await _get_json(f"pug/compound/inchikey/{q(key)}/cids/JSON")
     cids = (data or {}).get("IdentifierList", {}).get("CID", [])[:3]
-    db.cache_put(ck, cids)
+    store.cache_put(ck, cids)
     return cids
 
 
 async def cids_for_formula(formula: str) -> list[int]:
     ck = f"pc:formula:{formula}"
-    hit = db.cache_get(ck, 7 * DAY)
+    hit = store.cache_get(ck, 7 * DAY)
     if hit is not None:
         return hit
     data = await _get_json(f"pug/compound/fastformula/{q(formula)}/cids/JSON?MaxRecords=12")
     cids = (data or {}).get("IdentifierList", {}).get("CID", [])[:12]
-    db.cache_put(ck, cids)
+    store.cache_put(ck, cids)
     return cids
 
 
 async def synonyms(cid: int, limit: int = 20) -> list[str]:
     ck = f"pc:syn:{cid}"
-    hit = db.cache_get(ck, 30 * DAY)
+    hit = store.cache_get(ck, 30 * DAY)
     if hit is None:
         data = await _get_json(f"pug/compound/cid/{cid}/synonyms/JSON")
         info = (data or {}).get("InformationList", {}).get("Information", [])
         hit = info[0].get("Synonym", [])[:60] if info else []
-        db.cache_put(ck, hit)
+        store.cache_put(ck, hit)
     return hit[:limit]
 
 
 async def autocomplete(query: str, limit: int = 8) -> list[str]:
     ck = f"pc:ac:{query.strip().lower()}:{limit}"
-    hit = db.cache_get(ck, 7 * DAY)
+    hit = store.cache_get(ck, 7 * DAY)
     if hit is not None:
         return hit
     if config.OFFLINE:
@@ -159,13 +159,13 @@ async def autocomplete(query: str, limit: int = 8) -> list[str]:
         terms = r.json().get("dictionary_terms", {}).get("compound", []) if r.status_code == 200 else []
     except (httpx.TimeoutException, httpx.TransportError, ValueError) as exc:
         raise PubChemUnavailable(str(exc)) from exc
-    db.cache_put(ck, terms)
+    store.cache_put(ck, terms)
     return terms
 
 
 async def sdf_3d(cid: int) -> str | None:
     ck = f"pc:sdf3d:{cid}"
-    hit = db.cache_get(ck, 30 * DAY)
+    hit = store.cache_get(ck, 30 * DAY)
     if hit is not None:
         return hit or None
     if config.OFFLINE:
@@ -176,5 +176,5 @@ async def sdf_3d(cid: int) -> str | None:
     except (httpx.TimeoutException, httpx.TransportError) as exc:
         raise PubChemUnavailable(str(exc)) from exc
     text = r.text if r.status_code == 200 else ""
-    db.cache_put(ck, text)
+    store.cache_put(ck, text)
     return text or None

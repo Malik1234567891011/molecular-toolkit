@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "apps/web",
+      "framework": "nextjs",
+      "bindings": [{ "type": "service", "service": "api", "format": "url", "env": "ORBITAL_API_URL" }]
+    },
+    "api": {
+      "root": "services/api",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.vercel"
+    },
+    "rooms": {
+      "root": "services/rooms",
+      "entrypoint": "server.mjs"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/v1/(.*)", "destination": { "service": "api" } },
+    { "source": "/rooms/(.*)", "destination": { "service": "rooms" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import db
+from . import store
 
 router = APIRouter()
 COOKIE = "orbital_session"
@@ -41,8 +41,7 @@ def current_user(request: Request) -> str | None:
     token = request.cookies.get(COOKIE)
     if not token:
         return None
-    rows = db.query("SELECT user_id FROM sessions WHERE token=?", (token,))
-    return rows[0][0] if rows else None
+    return store.session_user(token)
 
 
 def _require(request: Request) -> str:
@@ -54,7 +53,7 @@ def _require(request: Request) -> str:
 
 def _start_session(response: Response, uid: str) -> None:
     token = secrets.token_urlsafe(32)
-    db.execute("INSERT INTO sessions(token, user_id, created) VALUES (?,?,?)", (token, uid, time.time()))
+    store.session_create(token, uid)
     response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90, path="/")
 
 
@@ -65,10 +64,13 @@ def register(body: Creds, response: Response) -> dict[str, Any]:
         raise HTTPException(400, "Enter a valid email address.")
     if len(body.password) < 8:
         raise HTTPException(400, "Use at least 8 characters for the password.")
-    if db.query("SELECT 1 FROM users WHERE email=?", (email,)):
-        raise HTTPException(409, "An account with this email already exists.")
     uid = secrets.token_hex(8)
-    db.execute("INSERT INTO users(id, email, pw_hash, created) VALUES (?,?,?,?)", (uid, email, _hash(body.password), time.time()))
+    try:
+        created = store.user_create(uid, email, _hash(body.password))
+    except ValueError:
+        raise HTTPException(400, "Use an email address made of letters, digits and . _ + - @.") from None
+    if not created:
+        raise HTTPException(409, "An account with this email already exists.")
     _start_session(response, uid)
     return {"id": uid, "email": email}
 
@@ -76,18 +78,18 @@ def register(body: Creds, response: Response) -> dict[str, Any]:
 @router.post("/v1/auth/login")
 def login(body: Creds, response: Response) -> dict[str, Any]:
     email = body.email.strip().lower()
-    rows = db.query("SELECT id, pw_hash FROM users WHERE email=?", (email,))
-    if not rows or not _check(body.password, rows[0][1]):
+    found = store.user_by_email(email)
+    if not found or not _check(body.password, found[1]):
         raise HTTPException(401, "Email or password is incorrect.")
-    _start_session(response, rows[0][0])
-    return {"id": rows[0][0], "email": email}
+    _start_session(response, found[0])
+    return {"id": found[0], "email": email}
 
 
 @router.post("/v1/auth/logout")
 def logout(request: Request, response: Response) -> dict[str, Any]:
     token = request.cookies.get(COOKIE)
     if token:
-        db.execute("DELETE FROM sessions WHERE token=?", (token,))
+        store.session_delete(token)
     response.delete_cookie(COOKIE, path="/")
     return {"ok": True}
 
@@ -97,8 +99,8 @@ def me(request: Request) -> dict[str, Any]:
     uid = current_user(request)
     if not uid:
         return {"user": None}
-    rows = db.query("SELECT email, course_profile FROM users WHERE id=?", (uid,))
-    return {"user": {"id": uid, "email": rows[0][0], "courseProfile": rows[0][1]} if rows else None}
+    user = store.user_get(uid)
+    return {"user": {"id": uid, "email": user["email"], "courseProfile": user.get("course_profile")} if user else None}
 
 
 class DocsIn(BaseModel):
@@ -114,13 +116,12 @@ def sync_docs(body: DocsIn, request: Request) -> dict[str, Any]:
         if not did:
             continue
         updated = float(d.get("updated", 0))
-        rows = db.query("SELECT updated FROM user_docs WHERE user_id=? AND doc_id=?", (uid, did))
-        if rows and rows[0][0] >= updated:
+        prev = store.doc_updated(uid, did)
+        if prev is not None and prev >= updated:
             continue
-        db.execute("INSERT OR REPLACE INTO user_docs(user_id, doc_id, updated, body, deleted) VALUES (?,?,?,?,?)",
-                   (uid, did, updated, json.dumps(d.get("body")), 1 if d.get("deleted") else 0))
-    rows = db.query("SELECT doc_id, updated, body, deleted FROM user_docs WHERE user_id=?", (uid,))
-    return {"docs": [{"id": r[0], "updated": r[1], "body": json.loads(r[2]), "deleted": bool(r[3])} for r in rows]}
+        store.doc_put(uid, did, updated, json.dumps(d.get("body")), bool(d.get("deleted")))
+    rows = store.docs_of(uid)
+    return {"docs": [{"id": r[0], "updated": r[1], "body": json.loads(r[2]), "deleted": r[3]} for r in rows]}
 
 
 class StateIn(BaseModel):
@@ -133,10 +134,10 @@ class StateIn(BaseModel):
 def sync_state(body: StateIn, request: Request) -> dict[str, Any]:
     uid = _require(request)
     key = body.key[:64]
-    rows = db.query("SELECT updated, body FROM user_state WHERE user_id=? AND key=?", (uid, key))
-    if rows and rows[0][0] > body.updated:
-        return {"key": key, "updated": rows[0][0], "body": json.loads(rows[0][1])}
-    db.execute("INSERT OR REPLACE INTO user_state(user_id, key, updated, body) VALUES (?,?,?,?)", (uid, key, body.updated, json.dumps(body.body)))
+    prev = store.state_get(uid, key)
+    if prev and prev[0] > body.updated:
+        return {"key": key, "updated": prev[0], "body": json.loads(prev[1])}
+    store.state_put(uid, key, body.updated, json.dumps(body.body))
     return {"key": key, "updated": body.updated, "body": body.body}
 
 
@@ -147,30 +148,25 @@ class ProfileIn(BaseModel):
 @router.post("/v1/auth/profile")
 def set_profile(body: ProfileIn, request: Request) -> dict[str, Any]:
     uid = _require(request)
-    db.execute("UPDATE users SET course_profile=? WHERE id=?", (body.courseProfile[:64], uid))
+    store.user_set_profile(uid, body.courseProfile[:64])
     return {"ok": True}
 
 
 @router.get("/v1/account/export")
 def export_all(request: Request) -> dict[str, Any]:
     uid = _require(request)
-    user = db.query("SELECT email, created, course_profile FROM users WHERE id=?", (uid,))
-    docs = db.query("SELECT doc_id, updated, body, deleted FROM user_docs WHERE user_id=?", (uid,))
-    state = db.query("SELECT key, updated, body FROM user_state WHERE user_id=?", (uid,))
-    shares = db.query("SELECT id, created, title FROM shares WHERE owner=?", (uid,))
+    user = store.user_get(uid)
     return {
-        "user": {"id": uid, "email": user[0][0], "created": user[0][1], "courseProfile": user[0][2]} if user else None,
-        "docs": [{"id": d[0], "updated": d[1], "body": json.loads(d[2]), "deleted": bool(d[3])} for d in docs],
-        "state": [{"key": s[0], "updated": s[1], "body": json.loads(s[2])} for s in state],
-        "shares": [{"id": s[0], "created": s[1], "title": s[2]} for s in shares],
+        "user": {"id": uid, "email": user["email"], "created": user["created"], "courseProfile": user.get("course_profile")} if user else None,
+        "docs": [{"id": d[0], "updated": d[1], "body": json.loads(d[2]), "deleted": d[3]} for d in store.docs_of(uid)],
+        "state": [{"key": s[0], "updated": s[1], "body": json.loads(s[2])} for s in store.states_of(uid)],
+        "shares": store.shares_of(uid),
     }
 
 
 @router.delete("/v1/account")
 def delete_all(request: Request, response: Response) -> dict[str, Any]:
     uid = _require(request)
-    for sql in ("DELETE FROM user_docs WHERE user_id=?", "DELETE FROM user_state WHERE user_id=?", "DELETE FROM shares WHERE owner=?",
-                "DELETE FROM sessions WHERE user_id=?", "DELETE FROM users WHERE id=?"):
-        db.execute(sql, (uid,))
+    store.user_delete_all(uid)
     response.delete_cookie(COOKIE, path="/")
     return {"deleted": True}

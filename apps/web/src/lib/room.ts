@@ -55,7 +55,11 @@ export function roomsUrl(): string {
   const env = process.env.NEXT_PUBLIC_ROOMS_URL;
   if (env) return env;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.hostname}:8720`;
+  // Local dev (and phones on the same Wi-Fi) reach the relay on its own port; hosted, the site
+  // routes /rooms/<room> to it.
+  const h = location.hostname;
+  const local = h === 'localhost' || h.endsWith('.local') || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
+  return local ? `${proto}://${h}:8720` : `${proto}://${location.host}/rooms`;
 }
 
 export function newRoomId(): string {

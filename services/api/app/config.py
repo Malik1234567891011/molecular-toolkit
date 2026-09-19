@@ -26,7 +26,7 @@ DATA_DIR = Path(os.environ.get("ORBITAL_DATA_DIR", ROOT / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "orbital.sqlite3"
 
-OPSIN_DIR = Path(os.environ.get("OPSIN_DIR", REPO / "services" / "opsin"))
+OPSIN_DIR = Path(os.environ.get("OPSIN_DIR", ROOT / "opsin"))
 OPSIN_JAR = OPSIN_DIR / "opsin-core-2.9.0-jar-with-dependencies.jar"
 OPSIN_CLASSES = OPSIN_DIR / "classes"
 

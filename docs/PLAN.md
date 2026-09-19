@@ -12,7 +12,7 @@ section of the spec is realised and where the code lives. Update it as work land
 | Client chemistry worker | `apps/web/worker` → `public/workers/chem.worker.js` | RDKit.js (validation, InChI/InChIKey, canonical SMILES, descriptors, CoordGen 2D) + OpenChemLib (3D conformers, MMFF94s+ relax, single-point energies) |
 | Studio UI | `apps/web/src` | Next.js 16 + React 19 + R3F Kit Canvas + custom SVG 2D editor on the same graph |
 | Chemistry API | `services/api` | FastAPI + RDKit (authority), OPSIN bridge, PubChem adapter + cache, naming adapter (course engine verify, PubChem, STOUT slot), conformer ensembles, quantum jobs, shares, accounts, analytics, tutor |
-| OPSIN | `services/opsin` | Long-lived JVM process speaking a line protocol (`OpsinBridge.java`) |
+| OPSIN | `services/api/opsin` | Long-lived JVM process speaking a line protocol (`OpsinBridge.java`) |
 | Study rooms | `services/rooms` | Yjs WebSocket relay |
 
 ### Deliberate deviations from the spec (and why)

@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-from . import db
+from . import store
 
 # Funnel steps: a session counts once per step if it fired any of the events.
 FUNNEL: list[tuple[str, tuple[str, ...]]] = [
@@ -29,7 +29,7 @@ def _rate(num: float, den: float) -> float | None:
 
 
 def compute() -> dict[str, Any]:
-    rows = db.query("SELECT at, session, name, props FROM events ORDER BY at")
+    rows = store.events_all()
     by_session: dict[str, list[tuple[float, str, dict]]] = defaultdict(list)
     counts: Counter[str] = Counter()
     days: dict[str, dict[str, Any]] = defaultdict(lambda: {"sessions": set(), "events": 0})

@@ -1,0 +1,16 @@
+# CLI deploys upload the working tree; keep secrets, local state and build output out of it.
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/node_modules
+**/.next
+**/__pycache__
+services/api/data
+services/api/opsin/*.jar
+services/api/opsin/classes
+corpus
+.claude
+.agents

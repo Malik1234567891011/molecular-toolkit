@@ -18,12 +18,12 @@ fi
 [ -f services/api/.env ] || cp services/api/.env.example services/api/.env
 
 echo "› OPSIN 2.9.0 (name → structure)"
-JAR=services/opsin/opsin-core-2.9.0-jar-with-dependencies.jar
+JAR=services/api/opsin/opsin-core-2.9.0-jar-with-dependencies.jar
 if [ ! -f "$JAR" ]; then
   curl -fL -o "$JAR" https://github.com/dan2097/opsin/releases/download/2.9.0/opsin-core-2.9.0-jar-with-dependencies.jar
 fi
-mkdir -p services/opsin/classes
-javac -cp "$JAR" -d services/opsin/classes services/opsin/OpsinBridge.java
+mkdir -p services/api/opsin/classes
+javac -cp "$JAR" -d services/api/opsin/classes services/api/opsin/OpsinBridge.java
 
 echo "› Web assets (RDKit.js, OpenChemLib, chemistry worker)"
 npm run build:assets -w @orbital/web

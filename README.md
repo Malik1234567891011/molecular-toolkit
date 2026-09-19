@@ -48,7 +48,7 @@ running verification log, is in [`docs/PLAN.md`](docs/PLAN.md).
 | `packages/chem` | Canonical molecular graph, SMILES/molfile IO, rings, aromaticity, CIP, validation, the course-rule naming engine and its trace (TypeScript, runs in browser, worker and Node) |
 | `apps/web` | The Next.js studio: R3F Kit Canvas, SVG 2D editor, panels, chemistry worker (RDKit.js + OpenChemLib) |
 | `services/api` | FastAPI + RDKit: name resolution, verification, PubChem, conformers, quantum jobs, tutor, OCSR, shares, analytics |
-| `services/opsin` | Long-lived OPSIN JVM process behind a line protocol |
+| `services/api/opsin` | Long-lived OPSIN JVM process behind a line protocol |
 | `services/rooms` | Yjs WebSocket relay for study rooms |
 
 ## Run it locally
@@ -64,6 +64,22 @@ npm run dev     # api :8710 · rooms :8720 · web http://localhost:3100
 The tutor and photo recognition need an Anthropic API key in `services/api/.env` (see
 `services/api/.env.example`). Without one, everything else works and those two features say
 they are unavailable.
+
+## Hosting (Vercel)
+
+One Vercel project, three services (`vercel.json`): the Next.js app at `/`, the chemistry API
+as a container (`services/api/Dockerfile.vercel`, which carries RDKit, PySCF and a JVM for OPSIN)
+at `/api/v1/*`, and the rooms relay as a Node function at `/rooms/*`. Pushing `main` deploys.
+
+Functions are stateless and scale to zero, so hosted state lives in Redis (the Upstash
+integration supplies `REDIS_URL`): shares, accounts, synced documents, practice progress, caches,
+quantum results, AR files, and study-room documents (kept an hour after a room goes quiet). Every
+key is under `orbital:`. Without `REDIS_URL` — local dev — the API uses SQLite in
+`services/api/data` and rooms stay in memory. Quantum jobs run inside the submit request when
+hosted, so they must finish within the function limit (5 minutes on Hobby).
+
+The API also needs `ANTHROPIC_API_KEY` (and `ANTHROPIC_WORKSPACE_ID` for org-level keys) set
+in the project's environment variables.
 
 ## Tests
 

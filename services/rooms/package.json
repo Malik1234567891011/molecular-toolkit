@@ -8,6 +8,7 @@
     "start": "node server.mjs"
   },
   "dependencies": {
+    "ioredis": "^5.11.1",
     "lib0": "^0.2.117",
     "ws": "^8.21.3",
     "y-protocols": "^1.0.7",

@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const apiDir = path.join(root, 'services/api');
 const uvicorn = path.join(apiDir, '.venv/bin/uvicorn');
 
-if (!existsSync(uvicorn) || !existsSync(path.join(root, 'services/opsin/classes/OpsinBridge.class'))) {
+if (!existsSync(uvicorn) || !existsSync(path.join(root, 'services/api/opsin/classes/OpsinBridge.class'))) {
   console.error('The Python API or OPSIN is not set up yet. Run:  bash scripts/setup.sh');
   process.exit(1);
 }

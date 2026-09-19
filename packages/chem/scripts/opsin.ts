@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const opsinDir = path.resolve(here, '../../../services/opsin');
+const opsinDir = path.resolve(here, '../../../services/api/opsin');
 
 export interface OpsinResult { status: 'SUCCESS' | 'WARNING' | 'FAILURE'; smiles: string; message: string; flags: string[] }
 

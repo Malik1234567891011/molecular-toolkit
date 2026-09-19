@@ -10,14 +10,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import chemistry, config, db, naming, pubchem
+from . import chemistry, config, db, naming, pubchem, store
 from .chemistry import ChemError
 from .opsin import opsin
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db.conn()
+    if store.backend() == "sqlite":
+        db.conn()
     try:
         await opsin.start()
     except Exception as exc:  # noqa: BLE001
@@ -27,6 +28,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Orbital chemistry API", version="0.1.0", lifespan=lifespan)
+
+
+class StripApiPrefix:
+    """Hosted, the public route /api/v1/... reaches this service with its path unchanged; locally
+    the Next.js rewrite has already dropped the /api. Serve both."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket") and scope["path"].startswith("/api/"):
+            scope = dict(scope, path=scope["path"][4:])
+            if isinstance(scope.get("raw_path"), bytes) and scope["raw_path"].startswith(b"/api/"):
+                scope["raw_path"] = scope["raw_path"][4:]
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(StripApiPrefix)
 
 
 @app.exception_handler(ChemError)
@@ -110,11 +129,11 @@ class ConformersIn(BaseModel):
 @app.post("/v1/molecules/conformers")
 def confs(body: ConformersIn) -> dict[str, Any]:
     key = f"conf:{body.smiles}:{body.count}:{body.seed}:{chemistry.RDKIT_VERSION}"
-    hit = db.cache_get(key)
+    hit = store.cache_get(key)
     if hit:
         return {"engine": engine(), **hit, "cached": True}
     res = chemistry.conformers(body.smiles, body.count, body.seed)
-    db.cache_put(key, res)
+    store.cache_put(key, res)
     return {"engine": engine(), **res}
 
 
@@ -234,7 +253,7 @@ def create_share(body: ShareIn, request: Request) -> dict[str, Any]:
         raise HTTPException(413, "Snapshot too large")
     sid = secrets.token_urlsafe(9)
     owner = _user_id(request)
-    db.execute("INSERT INTO shares(id, created, owner, title, snapshot) VALUES (?,?,?,?,?)", (sid, time.time(), owner, body.title, raw))
+    store.share_create(sid, owner, body.title, raw)
     return {"id": sid}
 
 
@@ -242,19 +261,17 @@ def create_share(body: ShareIn, request: Request) -> dict[str, Any]:
 def get_share(sid: str) -> dict[str, Any]:
     import json
 
-    rows = db.query("SELECT title, snapshot, created FROM shares WHERE id=?", (sid,))
-    if not rows:
+    rec = store.share_get(sid)
+    if not rec:
         raise HTTPException(404, "This share link does not exist (or was deleted).")
-    db.execute("UPDATE shares SET views = views + 1 WHERE id=?", (sid,))
-    return {"id": sid, "title": rows[0][0], "snapshot": json.loads(rows[0][1]), "created": rows[0][2]}
+    store.share_viewed(sid)
+    return {"id": sid, "title": rec["title"], "snapshot": json.loads(rec["snapshot"]), "created": rec["created"]}
 
 
 # ---------------------------------------------------------------------------------------------
 # AR assets: USDZ (iOS Quick Look) and GLB (Android Scene Viewer) need a real https URL.
 # Files are anonymous, content-addressed, and deleted after 24 hours.
 
-AR_DIR = config.DATA_DIR / "ar"
-AR_DIR.mkdir(parents=True, exist_ok=True)
 AR_TYPES = {"usdz": "model/vnd.usdz+zip", "glb": "model/gltf-binary"}
 
 
@@ -265,28 +282,26 @@ async def upload_ar_asset(request: Request, ext: str) -> dict[str, Any]:
     if ext not in AR_TYPES:
         raise HTTPException(400, "ext must be usdz or glb")
     body = await request.body()
-    if not body or len(body) > 20_000_000:
-        raise HTTPException(413, "Asset missing or larger than 20 MB")
+    # Hosted functions cap request bodies at 4.5 MB; course molecules are far smaller.
+    if not body or len(body) > 4_000_000:
+        raise HTTPException(413, "Asset missing or larger than 4 MB")
     now = time.time()
-    for f in AR_DIR.iterdir():
-        if now - f.stat().st_mtime > 24 * 3600:
-            f.unlink(missing_ok=True)
     name = f"{hashlib.sha256(body).hexdigest()[:20]}.{ext}"
-    (AR_DIR / name).write_bytes(body)
+    store.blob_put(name, body, 24 * 3600)
     return {"name": name, "url": f"/api/v1/ar-assets/{name}", "expires": now + 24 * 3600}
 
 
 @app.get("/v1/ar-assets/{name}")
 def get_ar_asset(name: str):
-    from fastapi.responses import FileResponse
+    from fastapi.responses import Response as RawResponse
 
     stem, _, ext = name.partition(".")
     if ext not in AR_TYPES or not stem.isalnum():
         raise HTTPException(404, "Not found")
-    path = AR_DIR / name
-    if not path.exists():
+    data = store.blob_get(name)
+    if data is None:
         raise HTTPException(404, "This AR model expired; open it again from Orbital.")
-    return FileResponse(path, media_type=AR_TYPES[ext], headers={"Cache-Control": "public, max-age=86400"})
+    return RawResponse(data, media_type=AR_TYPES[ext], headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------------------------
@@ -318,7 +333,7 @@ def events(body: EventsIn) -> dict[str, Any]:
         if name not in ALLOWED_EVENTS:
             continue
         props = {k: v for k, v in (e.get("props") or {}).items() if isinstance(v, (int, float, str, bool)) and k != "text"}
-        db.execute("INSERT INTO events(at, session, name, props) VALUES (?,?,?,?)", (float(e.get("at", time.time())), body.session[:64], name, json.dumps(props)))
+        store.event_add(float(e.get("at", time.time())), body.session[:64], name, json.dumps(props))
         n += 1
     return {"stored": n}
 
@@ -338,8 +353,7 @@ def _user_id(request: Request) -> str | None:
     token = request.cookies.get("orbital_session")
     if not token:
         return None
-    rows = db.query("SELECT user_id FROM sessions WHERE token=?", (token,))
-    return rows[0][0] if rows else None
+    return store.session_user(token)
 
 
 from . import accounts  # noqa: E402

@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { ShareView } from '@/components/share/ShareView';
 
-const API = process.env.ORBITAL_API_URL ?? 'http://127.0.0.1:8710';
-
 async function fetchTitle(id: string): Promise<string | null> {
+  // Hosted, a service binding supplies the API's internal URL at runtime.
+  const api = process.env.ORBITAL_API_URL ?? 'http://127.0.0.1:8710';
   try {
-    const r = await fetch(`${API}/v1/shares/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    const r = await fetch(`${api}/v1/shares/${encodeURIComponent(id)}`, { cache: 'no-store' });
     if (!r.ok) return null;
     const j = (await r.json()) as { title: string | null; snapshot: { name?: string } };
     return j.snapshot?.name ?? j.title ?? null;

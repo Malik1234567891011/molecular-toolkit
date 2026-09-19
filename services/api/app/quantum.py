@@ -16,7 +16,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from . import db
+from . import store
 
 router = APIRouter()
 
@@ -157,15 +157,19 @@ async def _worker_loop() -> None:
     assert _queue is not None
     while True:
         jid = await _queue.get()
-        rows = db.query("SELECT request FROM jobs WHERE id=?", (jid,))
-        if not rows:
-            continue
-        db.execute("UPDATE jobs SET status='running', updated=? WHERE id=?", (time.time(), jid))
-        try:
-            result = await asyncio.to_thread(_run, json.loads(rows[0][0]))
-            db.execute("UPDATE jobs SET status='done', updated=?, result=? WHERE id=?", (time.time(), json.dumps(result), jid))
-        except Exception as exc:  # noqa: BLE001
-            db.execute("UPDATE jobs SET status='failed', updated=?, error=? WHERE id=?", (time.time(), str(exc), jid))
+        await _execute(jid)
+
+
+async def _execute(jid: str) -> None:
+    job = store.job_get(jid)
+    if not job:
+        return
+    store.job_update(jid, "running")
+    try:
+        result = await asyncio.to_thread(_run, json.loads(job["request"]))
+        store.job_update(jid, "done", result=json.dumps(result))
+    except Exception as exc:  # noqa: BLE001
+        store.job_update(jid, "failed", error=str(exc))
 
 
 def _ensure_worker() -> None:
@@ -186,11 +190,16 @@ async def submit(body: QuantumIn) -> dict[str, Any]:
     import hashlib
 
     digest = hashlib.sha256(key.encode()).hexdigest()[:24]
-    rows = db.query("SELECT id, status FROM jobs WHERE id=?", (digest,))
-    if rows and rows[0][1] in ("done", "queued", "running"):
-        return {"id": digest, "status": rows[0][1], "cached": rows[0][1] == "done"}
-    db.execute("INSERT OR REPLACE INTO jobs(id, kind, status, created, updated, request) VALUES (?,?,?,?,?,?)",
-               (digest, "quantum", "queued", time.time(), time.time(), json.dumps(body.model_dump())))
+    prev = store.job_get(digest)
+    if prev and prev["status"] in ("done", "queued", "running"):
+        return {"id": digest, "status": prev["status"], "cached": prev["status"] == "done"}
+    store.job_put(digest, "quantum", "queued", json.dumps(body.model_dump()))
+    if store.backend() == "redis":
+        # Hosted (stateless instances): work left running after the response may be frozen or
+        # land on another instance, so the job completes inside this request.
+        await _execute(digest)
+        done = store.job_get(digest) or {}
+        return {"id": digest, "status": done.get("status", "failed"), "position": 0}
     _ensure_worker()
     assert _queue is not None
     await _queue.put(digest)
@@ -200,10 +209,10 @@ async def submit(body: QuantumIn) -> dict[str, Any]:
 
 @router.get("/v1/quantum/{jid}")
 async def status(jid: str) -> dict[str, Any]:
-    rows = db.query("SELECT status, result, error, created, updated FROM jobs WHERE id=?", (jid,))
-    if not rows:
+    job = store.job_get(jid)
+    if not job:
         raise HTTPException(404, "No such job")
-    st, result, error, created, updated = rows[0]
+    st, result, error, created, updated = job["status"], job["result"], job["error"], job["created"], job["updated"]
     out: dict[str, Any] = {"id": jid, "status": st, "elapsed": round(updated - created, 1)}
     if st == "done":
         out["result"] = json.loads(result)
