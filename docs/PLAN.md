@@ -29,15 +29,16 @@ section of the spec is realised and where the code lives. Update it as work land
 
 ## Phase status
 
-See the bottom of this file for the running log.
+All seven phases are built (see the commit history for each feature). Remaining work is
+verification and polish, tracked in the log below.
 
-- [ ] Phase 1 — core: graph + undo/redo, 2D editor, 3D Kit Canvas with ports, validation, facts, autosave, import/export
-- [ ] Phase 2 — naming: OPSIN, PubChem, course engine + trace, round-trip verification, provenance, grading, gold corpus
-- [ ] Phase 3 — trace pedagogy: parent candidates, numbering comparison, token ↔ atom sync, why-not
-- [ ] Phase 4 — projection lab + practice
-- [ ] Phase 5 — tutor, NL edits, scan, voice, mechanisms
-- [ ] Phase 6 — AR, render/export, orbitals, study rooms, sharing, streaks
-- [ ] Phase 7 — polish: motion, a11y, offline, mobile, error states
+- [x] Phase 1 — core: graph + undo/redo, 2D editor, 3D Kit Canvas with ports, validation, facts, autosave, import/export
+- [x] Phase 2 — naming: OPSIN, PubChem, course engine + trace, round-trip verification, provenance, grading, gold corpus
+- [x] Phase 3 — trace pedagogy: parent candidates, numbering comparison, token ↔ atom sync, why-not
+- [x] Phase 4 — projection lab + practice
+- [x] Phase 5 — tutor, NL edits, scan, voice, mechanisms
+- [x] Phase 6 — AR, render/export, orbitals, study rooms, sharing, streaks
+- [x] Phase 7 — polish: motion, a11y, offline, mobile, error states
 
 ## Log
 
@@ -49,3 +50,22 @@ See the bottom of this file for the running log.
 - Round-trip verification (engine name → OPSIN → RDKit canonical): **3,549 structures, 99.2 % verified, 0 wrong** in
   every profile; 28 honestly declined (carbamates/ureas, diol diesters, thioacids, one tricycle).
   Run: `node --experimental-strip-types packages/chem/scripts/verify-corpus.ts all`.
+
+### 2026-09-19 — hands-on verification pass (live browser, as a student)
+Checked against the spec by using the app in Chrome, fixing what fell short:
+- Measure mode explains itself (§10): distance vs typical length, angle vs VSEPR ideal with
+  reasons, dihedral + conformation. Atom angle notes judge the spread, not the average.
+- Conformer mode (§7): the rotation ring is easy to grab and no longer orbits the camera;
+  Relax minimizes in place; a low-energy conformer filmstrip (OCL torsion enumeration +
+  MMFF94s+) was missing and now exists.
+- Newman labels are textbook groups (CH₃, OH) and stay apart when eclipsed.
+- Selection halo is a thin Fresnel rim (§15), not a translucent disc.
+- Invalid-valence copy offers O⁺/N⁺ only when that charge makes the bond count valid (§7).
+- Naming honesty (§9.3): PubChem synonyms that break the taught rules (alphabetical order,
+  hyphen before the parent, CAS inverted) are listed apart and never offered as answers.
+- Chair drawing redrawn from an oblique view so axial bonds never overlap; side view
+  survives canvas remounts; lost WebGL contexts recover automatically.
+- Verified names persist per InChIKey so reopened molecules are verified instantly (§18).
+- Production timings (headless, warm): molecule restored ~0.5 s, analysis ~0.2–0.75 s,
+  verification ~0.6 s before caching.
+- E2E: `apps/web/e2e/run.mjs`, 15 user tasks, all passing.
