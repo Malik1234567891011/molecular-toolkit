@@ -120,10 +120,10 @@ const CHAPTERS: Chapter[] = [
         steps: [
           <>Switch to <B icon={<I.Pen size={12} />}>2D</B> at the top.</>,
           'Click to place an atom. Drag from an atom to draw a bond. Click a bond to make it double, then triple.',
-          <>The hexagon button (or <K>R</K>) draws rings — click it to choose the size, from 3 up to 8 and benzene, or press <K>3</K>–<K>8</K>. Click empty space to drop one, an atom to hang it off, or a bond to fuse it.</>,
+          <>The hexagon button (or <K>R</K>) draws rings — click it to choose the size (3 to 8, benzene, or type any size up to 30), or press <K>3</K>–<K>8</K>. Click empty space to drop one, an atom to hang it off, or a bond to fuse it.</>,
           <><K>W</K> and <K>D</K> draw wedge and dash bonds.</>,
         ],
-        tip: <><B icon={<I.Split size={12} />}>Split</B> shows 2D and 3D side by side. Select an atom in one and it lights up in the other.</>,
+        tip: <><B icon={<I.Split size={12} />}>Split</B> shows 2D and 3D side by side. Select an atom in one and it lights up in the other. To start over, the <B icon={<I.Trash size={12} />}>bin</B> in the toolbar clears everything (<K>⌘Z</K> undoes it), and <K>⌘A</K> selects the whole molecule so <K>Delete</K> removes it in one go.</>,
         tryIt: { label: 'Open the 2D drawing board', run: () => useStudio.setState({ view: '2d', tool2d: 'draw', landing: false }) },
       },
       {

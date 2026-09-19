@@ -124,6 +124,27 @@ export function ElementRail({ dock = false }: { dock?: boolean }) {
                   <span className="mono mr-1 text-text-3">{r.aromatic ? '⌬' : r.size}</span>{r.label}
                 </button>
               ))}
+              <label className="col-span-2 mt-1 flex items-center gap-1.5 text-[11.5px] text-text-2">
+                Any size
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  placeholder="12"
+                  className="w-14 rounded-md border border-border bg-panel-raised px-1.5 py-1 text-[12px]"
+                  data-testid="ring-size-input"
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    const size = Number((e.target as HTMLInputElement).value);
+                    if (size >= 3 && size <= 30) ring(size, false);
+                  }}
+                  onBlur={(e) => {
+                    const size = Number(e.target.value);
+                    if (size >= 3 && size <= 30) ring(size, false);
+                  }}
+                />
+                <span className="text-text-3">3–30, then ↵</span>
+              </label>
               <p className="col-span-2 mt-1 text-[11px] leading-snug text-text-3">Keys <b className="mono">3</b>–<b className="mono">8</b> pick the size while the ring tool is on. 2D: click empty space, an atom (attach), a bond (fuse), or ⇧-click an atom (spiro).</p>
             </div>
           ) : (

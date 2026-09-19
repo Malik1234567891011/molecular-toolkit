@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStudio, studio, type Mode3D, type RenderStyle } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { cleanLayout, relaxCurrent } from '@/lib/pipeline';
+import { clearMolecule } from '@/lib/actions';
 import { usePracticeHidesName } from '@/lib/practice';
 import { RoomCursors } from './RoomCursors';
 import { I } from '../ui/icons';
@@ -11,9 +12,27 @@ import { I } from '../ui/icons';
 const KitCanvas = dynamic(() => import('../three/KitCanvas'), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-text-3">Loading 3D…</div> });
 const Canvas2D = dynamic(() => import('../two/Canvas2D'), { ssr: false });
 
-function ToolButton({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+/** Wipe the canvas and start over. Undoable, so it needs no confirmation — just say so. */
+function ClearButton() {
+  const has = useStudio((st) => st.doc.atoms.length > 0);
+  if (!has) return null;
   return (
-    <button onClick={onClick} title={title} aria-label={title} aria-pressed={active} className={`flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium transition ${active ? 'bg-accent text-accent-ink' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}>
+    <ToolButton
+      onClick={() => {
+        clearMolecule({ toStart: false });
+        studio().notify({ kind: 'info', text: 'Canvas cleared — ⌘Z (Ctrl Z) brings it back.' }, 5000);
+      }}
+      title="Clear everything and start a new molecule (undoable)"
+      testid="tool-clear"
+    >
+      <I.Trash size={15} />
+    </ToolButton>
+  );
+}
+
+function ToolButton({ active, onClick, title, children, testid }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode; testid?: string }) {
+  return (
+    <button onClick={onClick} title={title} aria-label={title} aria-pressed={active} data-testid={testid} className={`flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium transition ${active ? 'bg-accent text-accent-ink' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}>
       {children}
     </button>
   );
@@ -65,6 +84,7 @@ function Toolbar3D() {
       <ToolButton onClick={() => relaxCurrent()} title="Relax: minimize from the current shape (force field)">
         <I.Sparkle size={15} /> <span className={compact ? 'hidden' : 'hidden md:inline'}>{geometry === 'relaxing' ? 'Relaxing…' : 'Relax'}</span>
       </ToolButton>
+      <ClearButton />
     </div>
   );
 }
@@ -88,6 +108,7 @@ function Toolbar2D() {
       <ToolButton onClick={() => bus.emit('fit')} title="Fit to view">
         <I.Focus size={15} />
       </ToolButton>
+      <ClearButton />
       <ToolButton onClick={() => studio().setSettings({ showLonePairs: !studio().settings.showLonePairs })} title="Show lone pairs">
         ⁚
       </ToolButton>

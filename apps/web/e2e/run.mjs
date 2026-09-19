@@ -273,6 +273,27 @@ test('rings: the ring tool offers other sizes, and digits set them', async (page
   const box = await page.locator('[data-testid=canvas-2d]').boundingBox();
   await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.25);
   await waitState(page, () => window.__orbital.getState().doc.atoms.length === 8); // 5-ring + 3-ring
+  // Any size, not just the buttons.
+  await page.click('[data-testid=tool-ring]');
+  await page.fill('[data-testid=ring-size-input]', '12');
+  await page.keyboard.press('Enter');
+  await waitState(page, () => window.__orbital.getState().ringSize === 12);
+});
+
+test('clear: one button wipes the canvas, and undo brings it back', async (page) => {
+  await openStudio(page);
+  await resolve(page, 'caffeine');
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length > 10);
+  const before = (await state(page)).atoms;
+  await page.click('[data-testid=tool-clear]');
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length === 0);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+  await waitState(page, (n) => window.__orbital.getState().doc.atoms.length === n, before);
+  // Select-all + Delete is the other way to empty it.
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+  await waitState(page, (n) => window.__orbital.getState().selection.atoms.length === n, before);
+  await page.keyboard.press('Delete');
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length === 0);
 });
 
 test('guide: opens from the start screen, every Try it does its thing', async (page) => {

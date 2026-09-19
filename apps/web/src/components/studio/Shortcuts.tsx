@@ -82,6 +82,12 @@ export function Shortcuts() {
         s.redo();
         return;
       }
+      // ⌘A / Ctrl A selects the whole molecule, so Delete wipes it in one go.
+      if (meta && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        if (s.doc.atoms.length) s.select(s.doc.atoms.map((a) => a.id), s.doc.bonds.map((b) => b.id));
+        return;
+      }
       if ((meta && e.key.toLowerCase() === 'k') || (e.key === '/' && !meta)) {
         e.preventDefault();
         useStudio.setState({ paletteOpen: true });
@@ -167,6 +173,7 @@ export function Shortcuts() {
         s.setSettings({ showHydrogens: !s.settings.showHydrogens });
         return;
       }
+
       if (k === 'm') {
         useStudio.setState({ mode3d: s.mode3d === 'measure' ? 'build' : 'measure', measure: [] });
         return;

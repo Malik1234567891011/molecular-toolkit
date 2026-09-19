@@ -199,7 +199,9 @@ export function startWithCarbon(): void {
   if (next) useStudio.setState({ view: '3d', mode3d: 'build', landing: false });
 }
 
-export function clearMolecule(): void {
+/** Empty the canvas. From a toolbar you stay where you are and keep drawing; from the command
+ *  palette ("New molecule") you go back to the start screen. Undo restores either way. */
+export function clearMolecule({ toStart = true }: { toStart?: boolean } = {}): void {
   studio().replace(emptyDocument(), 'Clear canvas');
-  useStudio.setState({ landing: true });
+  if (toStart) useStudio.setState({ landing: true });
 }
