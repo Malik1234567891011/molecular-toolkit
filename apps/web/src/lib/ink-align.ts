@@ -114,3 +114,65 @@ export async function alignToInk(url: string, atoms: Pt[], bonds: Bd[]): Promise
 export function applyInk<T extends Pt>(atoms: T[], t: InkTransform): T[] {
   return atoms.map((a) => ({ ...a, x: t.cx + (a.x - t.cx) * t.sx + t.dx, y: t.cy + (a.y - t.cy) * t.sy + t.dy }));
 }
+
+/**
+ * After the global fit, let each atom settle onto the vertex its bonds meet at: a small local
+ * search per atom, scored by ink along its own bonds, with a pull back toward where it started
+ * so atoms cannot slide along lines. Fixes branches the reader drew in the wrong local shape.
+ */
+export async function settleOnInk<T extends Pt>(url: string, atoms: T[], bonds: Bd[]): Promise<T[]> {
+  const map = await inkMap(url);
+  if (!map) return atoms;
+  const { w, h, d } = map;
+  const ink = (x: number, y: number) => {
+    const X = Math.round(x * (w - 1));
+    const Y = Math.round(y * (h - 1));
+    return X >= 0 && Y >= 0 && X < w && Y < h ? d[Y * w + X] : 0;
+  };
+  const live = bonds.filter((b) => !b.deleted && atoms[b.a] && atoms[b.b] && !atoms[b.a].deleted && !atoms[b.b].deleted);
+  const out = atoms.map((a) => ({ ...a }));
+  const start = atoms.map((a) => ({ x: a.x, y: a.y }));
+  const R = 0.12;
+  for (let pass = 0; pass < 3; pass++) {
+    out.forEach((a, i) => {
+      if (a.deleted) return;
+      const mine = live.filter((b) => b.a === i || b.b === i);
+      if (!mine.length) return;
+      const score = (x: number, y: number) => {
+        let s = 0;
+        let n = 0;
+        for (const b of mine) {
+          const o = out[b.a === i ? b.b : b.a];
+          for (let t = 0.15; t <= 0.8501; t += 0.1) {
+            s += ink(x + (o.x - x) * t, y + (o.y - y) * t);
+            n++;
+          }
+        }
+        const moved = Math.hypot(x - start[i].x, y - start[i].y);
+        // Bonds keep their length: otherwise a bond collapsed onto a line junction looks like
+        // "all ink" and one atom lands on top of another.
+        let stretch = 0;
+        for (const b of mine) {
+          const j = b.a === i ? b.b : b.a;
+          const L0 = Math.hypot(start[i].x - start[j].x, start[i].y - start[j].y) || 1e-3;
+          const L = Math.hypot(x - out[j].x, y - out[j].y);
+          stretch += Math.abs(L - L0) / L0;
+        }
+        // Ink at the atom itself: a line junction for carbons, the printed label for O, N, Cl…
+        return s / n + 0.35 * ink(x, y) - 0.2 * (moved / R) - 0.6 * (stretch / mine.length);
+      };
+      let best = { x: a.x, y: a.y, v: score(a.x, a.y) };
+      for (let dx = -R; dx <= R + 1e-9; dx += R / 16) {
+        for (let dy = -R; dy <= R + 1e-9; dy += R / 16) {
+          const x = start[i].x + dx;
+          const y = start[i].y + dy;
+          const v = score(x, y);
+          if (v > best.v) best = { x, y, v };
+        }
+      }
+      a.x = best.x;
+      a.y = best.y;
+    });
+  }
+  return out;
+}

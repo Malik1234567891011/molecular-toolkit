@@ -10,12 +10,15 @@ import asyncio
 import base64
 import io
 import os
+import re
 import tempfile
 import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from rdkit import Chem
 
 from . import chemistry, config
 
@@ -56,13 +59,14 @@ VISION_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
+            "smiles": {"type": "string", "description": "Write this FIRST: the structure as a SMILES string (heavy atoms only, no explicit H)."},
             "found": {"type": "boolean", "description": "False if the image contains no readable structure."},
             "atoms": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "element": {"type": "string", "description": "Element symbol of the heavy atom (a line vertex/end without a label is C). Labels like OH, NH2, CH3 are the heavy atom O, N, C."},
+                        "element": {"type": "string", "description": "Element symbol of the heavy atom (a line vertex/end without a label is C). Labels like OH, NH2, CH3 are the heavy atom O, N, C. List atoms in exactly the order they appear in your SMILES."},
                         "x": {"type": "number", "description": "Horizontal position, 0 = left edge, 1 = right edge of the image."},
                         "y": {"type": "number", "description": "Vertical position, 0 = top edge, 1 = bottom edge."},
                         "charge": {"type": "integer"},
@@ -87,9 +91,8 @@ VISION_TOOL = {
                     "additionalProperties": False,
                 },
             },
-            "notes": {"type": "string", "description": "Anything ambiguous (smudges, unclear labels, uncertain stereo)."},
+            "notes": {"type": "string", "description": "One short sentence for a student about anything ambiguous (smudges, unclear labels, uncertain stereo). No coordinates."},
             "ring_sizes": {"type": "array", "items": {"type": "integer"}, "description": "The number of atoms in each ring you see in the drawing (count the vertices of each ring polygon)."},
-            "smiles": {"type": "string", "description": "The same structure written independently as a SMILES string (a second reading used to cross-check the atom list)."},
             "name": {"type": "string", "description": "The compound's common or IUPAC name if you recognize it; empty string otherwise."},
         },
         "required": ["found", "atoms", "bonds", "notes", "ring_sizes", "smiles", "name"],
@@ -97,7 +100,7 @@ VISION_TOOL = {
     },
 }
 
-VISION_PROMPT = """Read the chemical structure drawn in this image (a skeletal/line drawing, possibly handwritten). Report every heavy atom — including the unlabeled carbons at line ends and vertices — with its position in the image, and every bond between them with its order and any wedge/hash. Do not add hydrogens. Count the vertices of every ring polygon carefully (a benzene hexagon has exactly six). Also give the structure as SMILES and, if you recognize the compound, its name — these are used to cross-check your atom list. Use low confidence for anything you are unsure of; a student will check your reading against the photo before using it."""
+VISION_PROMPT = """Read the chemical structure drawn in this image (a skeletal/line drawing, possibly handwritten). First write it as SMILES. Then report every heavy atom — including the unlabeled carbons at line ends and vertices — in exactly the order the atoms appear in your SMILES, each with its position in the image, and every bond between them with its order and any wedge/hash. Do not add hydrogens. Count the vertices of every ring polygon carefully (a benzene hexagon has exactly six). If you recognize the compound, give its name. Use low confidence for anything you are unsure of; a student will check your reading against the photo before using it."""
 
 
 def _vision(data: bytes, media_type: str, retry_hint: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -173,6 +176,154 @@ def _build(atoms: list[dict[str, Any]], bonds: list[dict[str, Any]], width: int,
         return "", False, str(exc)
 
 
+def _from_smiles(out: dict[str, Any], atoms: list[dict[str, Any]], width: int, height: int) -> tuple[str, list[dict[str, Any]]] | None:
+    """Bonds from the reader's SMILES, positions from its atom list. A multimodal reader writes the
+    SMILES of a drawing more reliably than it traces the drawing atom by atom (a benzene hexagon
+    comes back seven-membered), so when the atom list follows the SMILES order element for
+    element, the SMILES decides the topology and the atom list only says where each atom sits.
+    Wedges are recomputed from those positions so stereo in the SMILES survives."""
+    from rdkit.Geometry import Point3D
+
+    m = Chem.MolFromSmiles(out.get("smiles") or "") if out.get("smiles") else None
+    if m is None or m.GetNumAtoms() != len(atoms):
+        return None
+    for i, a in enumerate(atoms):
+        el = str(a.get("element") or "C").capitalize()
+        if m.GetAtomWithIdx(i).GetSymbol() != el:
+            return None
+    Chem.Kekulize(m, clearAromaticFlags=True)
+    positions = _clean_layout(m, atoms, width, height)
+    conf = Chem.Conformer(m.GetNumAtoms())
+    scale = max(width, height) / 40.0 or 1.0
+    for k, (x, y) in enumerate(positions):
+        conf.SetAtomPosition(k, Point3D(x * width / scale, -y * height / scale, 0.0))
+    cid = m.AddConformer(conf, assignId=True)
+    Chem.WedgeMolBonds(m, m.GetConformer(cid))
+    bonds = []
+    for b in m.GetBonds():
+        d = b.GetBondDir()
+        bonds.append({
+            "a": b.GetBeginAtomIdx(), "b": b.GetEndAtomIdx(),
+            "order": {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}.get(b.GetBondType(), 1),
+            "stereo": "wedge" if d == Chem.BondDir.BEGINWEDGE else "hash" if d == Chem.BondDir.BEGINDASH else "none",
+            "confidence": 0.9,
+        })
+    for k, (x, y) in enumerate(positions):
+        atoms[k]["x"], atoms[k]["y"] = x, y
+    return Chem.MolToSmiles(Chem.MolFromSmiles(out["smiles"])), bonds
+
+
+def _clean_layout(m: Any, atoms: list[dict[str, Any]], width: int, height: int) -> list[tuple[float, float]]:
+    """A tidy RDKit depiction of the structure (true hexagons, even bond lengths), placed by a
+    Procrustes fit — rotation, reflection, scale, shift — onto the reader's rough positions,
+    which share its atom order. The client then snaps the result onto the ink."""
+    import numpy as np
+    from rdkit.Chem import rdDepictor
+
+    work = Chem.Mol(m)
+    rdDepictor.Compute2DCoords(work)
+    c = work.GetConformer()
+    P = np.array([[c.GetAtomPosition(i).x, -c.GetAtomPosition(i).y] for i in range(work.GetNumAtoms())])
+    Q = np.array([[float(a["x"]) * width, float(a["y"]) * height] for a in atoms])
+    if len(P) < 2:
+        return [(float(a["x"]), float(a["y"])) for a in atoms]
+    pm, qm = P.mean(0), Q.mean(0)
+    P0, Q0 = P - pm, Q - qm
+    best = None
+    for flip in (1.0, -1.0):
+        Pf = P0 * np.array([1.0, flip])
+        U, S, Vt = np.linalg.svd(Pf.T @ Q0)
+        R = U @ Vt
+        if np.linalg.det(R) < 0:
+            continue
+        s = S.sum() / max((Pf ** 2).sum(), 1e-9)
+        fitted = s * Pf @ R + qm
+        err = ((fitted - Q) ** 2).sum()
+        if best is None or err < best[0]:
+            best = (err, fitted)
+    if best is None:
+        return [(float(a["x"]), float(a["y"])) for a in atoms]
+    return [(float(x) / width, float(y) / height) for x, y in best[1]]
+
+
+def _map_onto_smiles(out: dict[str, Any], atoms: list[dict[str, Any]], bonds: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    """When the traced atoms do not line up with the reader's SMILES (it traced an extra ring
+    atom, say), keep the SMILES topology and borrow positions: a maximum common substructure
+    maps traced atoms onto SMILES atoms, and the few unmapped ones are placed beside their
+    bonded neighbours (the client then settles every atom onto the ink)."""
+    import math
+
+    from rdkit import Chem
+    from rdkit.Chem import rdFMCS
+
+    m = Chem.MolFromSmiles(out.get("smiles") or "") if out.get("smiles") else None
+    if m is None or not atoms:
+        return None
+    rw = Chem.RWMol()
+    for a in atoms:
+        el = str(a.get("element") or "C").capitalize()
+        rw.AddAtom(Chem.Atom(el if len(el) <= 2 else "C"))
+    for b in bonds:
+        i, j = int(b.get("a", -1)), int(b.get("b", -1))
+        if 0 <= i < len(atoms) and 0 <= j < len(atoms) and i != j and not rw.GetBondBetweenAtoms(i, j):
+            rw.AddBond(i, j, Chem.BondType.SINGLE)
+    traced = rw.GetMol()
+    traced.UpdatePropertyCache(strict=False)
+    Chem.GetSymmSSSR(traced)
+    # Same atom order as the SMILES as written (that order is what _from_smiles uses), with
+    # every bond made single so the comparison is about connectivity only.
+    plain = Chem.Mol(m)
+    Chem.Kekulize(plain, clearAromaticFlags=True)
+    for bd in plain.GetBonds():
+        bd.SetBondType(Chem.BondType.SINGLE)
+    plain.UpdatePropertyCache(strict=False)
+    res = rdFMCS.FindMCS([traced, plain], atomCompare=rdFMCS.AtomCompare.CompareElements, bondCompare=rdFMCS.BondCompare.CompareAny, ringMatchesRingOnly=False, completeRingsOnly=False, timeout=2)
+    if not res.numAtoms:
+        return None
+    patt = Chem.MolFromSmarts(res.smartsString)
+    ti = traced.GetSubstructMatch(patt)
+    mi = plain.GetSubstructMatch(patt)
+    if not ti or not mi or len(mi) < 0.7 * m.GetNumAtoms():
+        return None
+    pos: dict[int, tuple[float, float]] = {}
+    conf: dict[int, float] = {}
+    for a, b in zip(ti, mi):
+        pos[b] = (float(atoms[a]["x"]), float(atoms[a]["y"]))
+        conf[b] = float(atoms[a].get("confidence") or 0.7)
+    lengths = [math.dist(pos[x.GetBeginAtomIdx()], pos[x.GetEndAtomIdx()]) for x in m.GetBonds() if x.GetBeginAtomIdx() in pos and x.GetEndAtomIdx() in pos]
+    step = sorted(lengths)[len(lengths) // 2] if lengths else 0.08
+    for _ in range(m.GetNumAtoms()):
+        pending = [i for i in range(m.GetNumAtoms()) if i not in pos]
+        if not pending:
+            break
+        for i in pending:
+            placed = [n.GetIdx() for n in m.GetAtomWithIdx(i).GetNeighbors() if n.GetIdx() in pos]
+            if not placed:
+                continue
+            ax, ay = pos[placed[0]]
+            # Point away from the anchor's other neighbours.
+            others = [pos[n.GetIdx()] for n in m.GetAtomWithIdx(placed[0]).GetNeighbors() if n.GetIdx() in pos and n.GetIdx() != i]
+            vx, vy = (ax - sum(o[0] for o in others) / len(others), ay - sum(o[1] for o in others) / len(others)) if others else (1.0, 0.0)
+            norm = math.hypot(vx, vy) or 1.0
+            pos[i] = (ax + vx / norm * step, ay + vy / norm * step)
+            conf[i] = 0.3  # invented position: highlighted for the student to check
+    if len(pos) != m.GetNumAtoms():
+        return None
+    return [{"element": m.GetAtomWithIdx(i).GetSymbol(), "x": pos[i][0], "y": pos[i][1], "charge": m.GetAtomWithIdx(i).GetFormalCharge(), "confidence": conf[i]} for i in range(m.GetNumAtoms())]
+
+
+def _alternative(smiles: str, out: dict[str, Any]) -> str | None:
+    from rdkit import Chem
+
+    alt = Chem.MolFromSmiles(out.get("smiles") or "") if out.get("smiles") else None
+    if alt is None:
+        return None
+    m = Chem.MolFromSmiles(smiles) if smiles else None
+    if m is not None and Chem.MolToSmiles(m, isomericSmiles=False) == Chem.MolToSmiles(alt, isomericSmiles=False):
+        return None
+    return Chem.MolToSmiles(alt)
+
+
 async def _consistency(smiles: str, out: dict[str, Any]) -> list[str]:
     """Cross-check the atom-by-atom reading against the reader's own ring count, SMILES and name.
     A multimodal reader can miscount a ring while naming the compound correctly; disagreement
@@ -192,8 +343,14 @@ async def _consistency(smiles: str, out: dict[str, Any]) -> list[str]:
     alt = Chem.MolFromSmiles(out.get("smiles") or "") if out.get("smiles") else None
     if alt is not None and Chem.MolToSmiles(alt, isomericSmiles=False) != canon:
         problems.append(f"its SMILES reading ({out.get('smiles')}) is a different structure from its atom-by-atom reading")
-    name = (out.get("name") or "").strip()
-    if name:
+    raw_name = (out.get("name") or "").strip()
+    # "Ibuprofen (2-[4-(2-methylpropyl)phenyl]propanoic acid)": check each name it contains.
+    both = re.match(r"^(.*?)\s+\((.*)\)\s*$", raw_name)
+    names = [both.group(1).strip(), both.group(2).strip(), raw_name] if both else [raw_name]
+    mismatch = None
+    for name in names[:3]:
+        if not name:
+            continue
         try:
             r = await opsin.parse(name)
             named = Chem.MolFromSmiles(r.smiles) if r.ok else None
@@ -208,8 +365,14 @@ async def _consistency(smiles: str, out: dict[str, Any]) -> list[str]:
                 named = Chem.MolFromSmiles(smi) if smi else None
             except Exception:  # noqa: BLE001
                 named = None
-        if named is not None and Chem.MolToSmiles(named, isomericSmiles=False) != canon:
-            problems.append(f"it identified the compound as {name}, but the structure it traced is not {name}")
+        if named is None:
+            continue
+        if Chem.MolToSmiles(named, isomericSmiles=False) == canon:
+            mismatch = None
+            break
+        mismatch = mismatch or name
+    if mismatch:
+        problems.append(f"it identified the compound as {mismatch}, but the structure it traced is not {mismatch}")
     return problems
 
 
@@ -235,7 +398,18 @@ async def recognize(body: RecognizeIn) -> dict[str, Any]:
         bonds = out.get("bonds") or []
         if not out.get("found") or not atoms:
             return {"engine": "vision", "found": False, "atoms": [], "bonds": [], "notes": out.get("notes", ""), "image": {"width": width, "height": height}}
-        smiles, valid, error = _build(atoms, bonds, width, height)
+        via = _from_smiles(out, atoms, width, height)
+        if not via:
+            remapped = _map_onto_smiles(out, atoms, bonds)
+            if remapped:
+                via = _from_smiles(out, remapped, width, height)
+                if via:
+                    atoms = remapped
+        if via:
+            smiles, bonds = via
+            valid, error = True, None
+        else:
+            smiles, valid, error = _build(atoms, bonds, width, height)
         problems = await _consistency(smiles, out) if valid else []
         reread = False
         if problems:
@@ -249,7 +423,12 @@ async def recognize(body: RecognizeIn) -> dict[str, Any]:
             try:
                 again = await asyncio.to_thread(_vision, data, media, hint)
                 a2, b2 = again.get("atoms") or [], again.get("bonds") or []
-                s2, v2, e2 = _build(a2, b2, width, height) if a2 else ("", False, None)
+                via2 = _from_smiles(again, a2, width, height) if a2 else None
+                if via2:
+                    s2, b2 = via2
+                    v2, e2 = True, None
+                else:
+                    s2, v2, e2 = _build(a2, b2, width, height) if a2 else ("", False, None)
                 if v2:
                     p2 = await _consistency(s2, again)
                     if len(p2) < len(problems):
@@ -267,8 +446,12 @@ async def recognize(body: RecognizeIn) -> dict[str, Any]:
             "bonds": [{"a": b.get("a"), "b": b.get("b"), "order": b.get("order", 1), "stereo": b.get("stereo", "none"), "confidence": b.get("confidence")} for b in bonds],
             "notes": out.get("notes", ""),
             "readerName": out.get("name") or None,
-            "warnings": [f"The reader disagrees with itself: {p}. Check the highlighted drawing carefully against your photo." for p in problems],
+            "warnings": [p[0].upper() + p[1:] + "." for p in problems],
+            # When the atom-by-atom tracing is the odd one out, its independent SMILES reading
+            # is offered as an alternative (still confirmed by the student).
+            "altSmiles": _alternative(smiles, out) if problems else None,
             "reread": reread,
+            "topology": "smiles" if via else "tracing",
             "seconds": round(time.time() - t0, 2),
             "note": "An AI reading of your photo — probabilistic, especially for stereo. Check every highlighted atom and bond before accepting. The image is not stored.",
         }

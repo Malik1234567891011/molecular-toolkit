@@ -14,11 +14,11 @@ import { loadStructure } from '@/lib/actions';
 import { atomColor } from '@/lib/colors';
 import { useResolvedTheme } from '@/lib/useTheme';
 import { I } from '../ui/icons';
-import { alignToInk, applyInk } from '@/lib/ink-align';
+import { alignToInk, applyInk, settleOnInk } from '@/lib/ink-align';
 
 interface SAtom { symbol: string; x: number; y: number; charge: number; confidence: number; deleted?: boolean }
 interface SBond { a: number; b: number; order: 1 | 2 | 3; stereo: 'none' | 'wedge' | 'hash' | 'wavy'; confidence: number; deleted?: boolean }
-interface Recognition { atoms: SAtom[]; bonds: SBond[]; notes?: string; engine: string; image: { width: number; height: number }; warnings?: string[]; readerName?: string | null }
+interface Recognition { atoms: SAtom[]; bonds: SBond[]; notes?: string; engine: string; image: { width: number; height: number }; warnings?: string[]; readerName?: string | null; altSmiles?: string | null }
 
 const ELEMENTS = ['C', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I'];
 const LOW = 0.75;
@@ -109,7 +109,8 @@ export function ScanDialog() {
         const bonds = r.bonds.map((b) => ({ ...b, order: (b.order ?? 1) as 1 | 2 | 3, stereo: b.stereo ?? 'none', confidence: b.confidence ?? 0.5 }));
         // The reader places atoms roughly; snap the overlay onto the ink it describes.
         const t = await alignToInk(image.url, atoms, bonds).catch(() => null);
-        setRec({ engine: r.engine, notes: r.notes, warnings: r.warnings ?? [], readerName: r.readerName ?? null, image: r.image, atoms: t ? applyInk(atoms, t) : atoms, bonds });
+        const placed = t ? await settleOnInk(image.url, applyInk(atoms, t), bonds).catch(() => applyInk(atoms, t)) : atoms;
+        setRec({ engine: r.engine, notes: r.notes, warnings: r.warnings ?? [], readerName: r.readerName ?? null, altSmiles: r.altSmiles ?? null, image: r.image, atoms: placed, bonds });
       }
     } catch (e) {
       setErr((e as Error).message);
@@ -181,9 +182,11 @@ export function ScanDialog() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="relative overflow-hidden rounded-xl border border-border bg-white" data-testid="scan-overlay">
+              {/* Sized to the photo (capped at half the screen) so the overlay stays on it and the
+                  Accept / Trace buttons stay in view. */}
+              <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl border border-border bg-white" data-testid="scan-overlay">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt="Your photo" className="block w-full" style={{ opacity: rec ? 0.55 : 1 }} />
+                <img src={image.url} alt="Your photo" className="block max-h-[48vh] w-auto max-w-full" style={{ opacity: rec ? 0.55 : 1 }} />
                 {rec && (
                   <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
                     {rec.bonds.map((b, k) => {
@@ -252,7 +255,20 @@ export function ScanDialog() {
                             : 'Everything was read with high confidence — still, compare it with your photo.'}
                     </b>{' '}
                     Tap an atom to change it, tap a bond to change its order, right-click (long-press) a bond to delete it.
-                    {!edits && rec.warnings?.map((w) => <span key={w} className="block pt-1 text-text">{w}</span>)}
+                    {!edits && rec.warnings?.length ? (
+                      <ul className="list-disc space-y-0.5 pl-4 pt-1 text-text">
+                        {rec.warnings.map((w) => <li key={w}>{w}</li>)}
+                      </ul>
+                    ) : null}
+                    {!edits && rec.altSmiles && (
+                      <button
+                        onClick={() => { track('scan_accepted', { via: 'alternative-reading' }); void loadStructure(rec.altSmiles!, rec.readerName ?? 'Scanned structure', 'Load scanned structure').then((ok) => ok && close()); }}
+                        className="mt-2 rounded-lg border border-amber/60 px-2.5 py-1 text-[12.5px] font-medium hover:bg-amber-soft"
+                        data-testid="scan-alternative"
+                      >
+                        Use the reader&apos;s other reading{rec.readerName ? ` (${rec.readerName})` : ''} instead
+                      </button>
+                    )}
                     {check?.formula && <span className="block pt-1 text-text-2">This reading is <b className="font-semibold text-text">{check.formula}</b>{rec.readerName ? <> · the reader thinks it is <i>{rec.readerName}</i></> : null}.</span>}
                     {rec.notes && <span className="block pt-1 text-text-2">Reader’s note: {rec.notes}</span>}
                   </div>
