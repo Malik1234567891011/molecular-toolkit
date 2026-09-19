@@ -29,7 +29,7 @@ function Seg<T extends string>({ value, options, onChange, label }: { value: T; 
   );
 }
 
-export function PanelButton({ panel, icon, label, kbd }: { panel: SidePanel; icon: React.ReactNode; label: string; kbd?: string }) {
+export function PanelButton({ panel, icon, label, kbd, wide }: { panel: SidePanel; icon: React.ReactNode; label: string; kbd?: string; wide?: boolean }) {
   const active = useStudio((s) => s.panel === panel);
   return (
     <button
@@ -43,7 +43,8 @@ export function PanelButton({ panel, icon, label, kbd }: { panel: SidePanel; ico
       className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium transition ${active ? 'bg-accent-soft text-accent-strong' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}
     >
       {icon}
-      <span className="hidden xl:inline">{label}</span>
+      {/* The molecule's name needs the room on laptops: most labels appear only on wide screens. */}
+      <span className={wide ? 'hidden xl:inline' : 'hidden 2xl:inline'}>{label}</span>
     </button>
   );
 }
@@ -103,7 +104,7 @@ function MoreMenu() {
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" title="More tools" className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium transition ${anyActive || open ? 'bg-accent-soft text-accent-strong' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`} data-testid="more-menu">
         <I.Grid size={16} />
-        <span className="hidden xl:inline">More</span>
+        <span className="hidden 2xl:inline">More</span>
       </button>
       {open && (
         <div role="menu" className="glass fade-up absolute right-0 top-full z-50 mt-2 w-56 rounded-xl p-1">
@@ -141,7 +142,7 @@ export function TopBar() {
         </svg>
         <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">Orbital</span>
       </button>
-      <div className="hidden w-[300px] shrink-0 md:block">
+      <div className="hidden w-[220px] shrink-0 md:block 2xl:w-[300px]">
         <SearchBox />
       </div>
       <button onClick={() => useStudio.setState({ paletteOpen: true })} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised md:hidden" aria-label="Find a molecule or command" data-testid="mobile-search">
@@ -171,7 +172,7 @@ export function TopBar() {
       />
       <nav className="flex items-center gap-0.5" aria-label="Panels">
         <div className="hidden items-center gap-0.5 md:flex">
-          <PanelButton panel="explain" icon={<I.Lightbulb size={16} />} label="Explain" kbd="E" />
+          <PanelButton panel="explain" icon={<I.Lightbulb size={16} />} label="Explain" kbd="E" wide />
           <PanelButton panel="projection" icon={<I.Layers size={16} />} label="Projections" />
           <PanelButton panel="practice" icon={<I.Target size={16} />} label="Practice" />
           <PanelButton panel="tutor" icon={<I.Chat size={16} />} label="Tutor" />

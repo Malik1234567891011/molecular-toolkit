@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { isRotatable, type AtomId, type Vec3 } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
+import { bestView } from '@/lib/view';
 import { addAtomTo, connectAtoms, cycleBondOrder } from '@/lib/edit';
 import { bus } from '@/lib/events';
 import { useResolvedTheme } from '@/lib/useTheme';
@@ -62,12 +63,13 @@ function CameraRig() {
         }
       }
       if (payload === 'orient' && conf) {
-        // Look along the axis of least spread so flat molecules face the viewer.
+        // Face-on (axis of least spread), nudged to where no atom hides behind another, long
+        // axis horizontal (lib/view).
         const n = principalNormal(Object.values(conf.coordinates), center);
         if (n) {
-          dir = n;
-          camera.up.set(0, 1, 0);
-          if (Math.abs(dir.y) > 0.95) camera.up.set(0, 0, 1);
+          const v = bestView(conf.coordinates, new Set(doc.atoms.map((a) => a.id)), center, [n.x, n.y, n.z]);
+          dir = new THREE.Vector3(...v.dir);
+          camera.up.set(...v.up);
         }
       }
       const to = target.clone().addScaledVector(dir, dist);
