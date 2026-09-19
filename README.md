@@ -38,6 +38,8 @@ running verification log, is in [`docs/PLAN.md`](docs/PLAN.md).
 - **Orbitals & ESP** (PySCF), resonance contributors, most-acidic-proton, SN2 and other curated
   mechanisms, isomer comparison (including meso detection), study rooms, share links and embeds,
   WebXR AR, and exports (PNG, GIF, video, SVG, molfile, SDF, glTF/GLB, STL, USDZ).
+- **How Orbital works**: an in-app guide to every feature in plain words, each with where to
+  find it and a "Try it" that does it for real (start screen, the Guide button, ⌘K, or `/guide`).
 - Installable PWA, offline for recent molecules; light and dark themes, reduced motion,
   colour-vision-safe atoms, keyboard building and screen-reader narration.
 
@@ -77,6 +79,10 @@ quantum results, AR files, and study-room documents (kept an hour after a room g
 key is under `orbital:`. Without `REDIS_URL` — local dev — the API uses SQLite in
 `services/api/data` and rooms stay in memory. Quantum jobs run inside the submit request when
 hosted, so they must finish within the function limit (5 minutes on Hobby).
+
+Hobby includes 4 Active-CPU hours, 360 GB-hours of memory and 1M requests a month. A quantum
+job is the only heavy thing here: about 7 s of CPU for HF/STO-3G on a 33-atom molecule, ~75 s
+for B3LYP/6-31G*. A study room holds a function instance open while anyone is connected.
 
 The API also needs `ANTHROPIC_API_KEY` (and `ANTHROPIC_WORKSPACE_ID` for org-level keys) set
 in the project's environment variables.
