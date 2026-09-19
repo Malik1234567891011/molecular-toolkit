@@ -5,7 +5,7 @@
  * sent once for recognition and never stored; "Trace it myself" keeps it entirely on-device.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { parseMolfile, validateDocument } from '@orbital/chem';
+import { computeFormula, parseMolfile, prettyFormula, validateDocument } from '@orbital/chem';
 import { useStudio } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { api, tryApi, type Health } from '@/lib/api';
@@ -17,7 +17,7 @@ import { I } from '../ui/icons';
 
 interface SAtom { symbol: string; x: number; y: number; charge: number; confidence: number; deleted?: boolean }
 interface SBond { a: number; b: number; order: 1 | 2 | 3; stereo: 'none' | 'wedge' | 'hash' | 'wavy'; confidence: number; deleted?: boolean }
-interface Recognition { atoms: SAtom[]; bonds: SBond[]; notes?: string; engine: string; image: { width: number; height: number } }
+interface Recognition { atoms: SAtom[]; bonds: SBond[]; notes?: string; engine: string; image: { width: number; height: number }; warnings?: string[]; readerName?: string | null }
 
 const ELEMENTS = ['C', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I'];
 const LOW = 0.75;
@@ -104,7 +104,7 @@ export function ScanDialog() {
       if (r.found === false || !r.atoms.length) {
         setErr(`No structure could be read${r.notes ? ` (${r.notes})` : ''}. Try a tighter crop, or trace it yourself.`);
       } else {
-        setRec({ engine: r.engine, notes: r.notes, image: r.image, atoms: r.atoms.map((a) => ({ symbol: a.symbol ?? 'C', x: a.x, y: a.y, charge: a.charge ?? 0, confidence: a.confidence ?? 0.5 })), bonds: r.bonds.map((b) => ({ ...b, order: (b.order ?? 1) as 1 | 2 | 3, stereo: b.stereo ?? 'none', confidence: b.confidence ?? 0.5 })) });
+        setRec({ engine: r.engine, notes: r.notes, warnings: r.warnings ?? [], readerName: r.readerName ?? null, image: r.image, atoms: r.atoms.map((a) => ({ symbol: a.symbol ?? 'C', x: a.x, y: a.y, charge: a.charge ?? 0, confidence: a.confidence ?? 0.5 })), bonds: r.bonds.map((b) => ({ ...b, order: (b.order ?? 1) as 1 | 2 | 3, stereo: b.stereo ?? 'none', confidence: b.confidence ?? 0.5 })) });
       }
     } catch (e) {
       setErr((e as Error).message);
@@ -127,7 +127,8 @@ export function ScanDialog() {
     try {
       const doc = parseMolfile(toMolfile(rec)).doc;
       const issues = validateDocument(doc).filter((v) => v.severity === 'error');
-      return { ok: !issues.length, issues };
+      const f = computeFormula(doc);
+      return { ok: !issues.length, issues, formula: prettyFormula(f.counts, f.charge) };
     } catch (e) {
       return { ok: false, issues: [{ title: (e as Error).message }] };
     }
@@ -235,9 +236,19 @@ export function ScanDialog() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className={`rounded-xl border px-3 py-2 text-[12.5px] ${lowCount ? 'border-amber/50 bg-amber-soft' : 'border-good/40 bg-good-soft'}`} data-testid="scan-status">
-                    <b className="font-semibold">{lowCount ? `Check ${lowCount} highlighted item${lowCount > 1 ? 's' : ''}.` : 'Everything was read with high confidence — still, compare it with your photo.'}</b>{' '}
+                  <div className={`rounded-xl border px-3 py-2 text-[12.5px] ${lowCount || (rec.warnings?.length && !edits) ? 'border-amber/50 bg-amber-soft' : 'border-good/40 bg-good-soft'}`} data-testid="scan-status">
+                    <b className="font-semibold">
+                      {rec.warnings?.length && !edits
+                        ? 'Check this reading carefully — the reader disagrees with itself.'
+                        : lowCount
+                          ? `Check ${lowCount} highlighted item${lowCount > 1 ? 's' : ''}.`
+                          : edits
+                            ? 'Your corrections are applied — compare once more with your photo.'
+                            : 'Everything was read with high confidence — still, compare it with your photo.'}
+                    </b>{' '}
                     Tap an atom to change it, tap a bond to change its order, right-click (long-press) a bond to delete it.
+                    {!edits && rec.warnings?.map((w) => <span key={w} className="block pt-1 text-text">{w}</span>)}
+                    {check?.formula && <span className="block pt-1 text-text-2">This reading is <b className="font-semibold text-text">{check.formula}</b>{rec.readerName ? <> · the reader thinks it is <i>{rec.readerName}</i></> : null}.</span>}
                     {rec.notes && <span className="block pt-1 text-text-2">Reader’s note: {rec.notes}</span>}
                   </div>
                   {check && !check.ok && <p className="text-[12.5px] text-danger">Not a valid structure yet: {check.issues[0].title}</p>}

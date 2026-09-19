@@ -127,8 +127,8 @@ function Home() {
       <section className="space-y-2">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Course</h3>
         <label className="flex items-center justify-between gap-2 text-[12.5px]">
-          <span className="text-text-2">Naming convention</span>
-          <select value={profileId} onChange={(e) => studio().setSettings({ profileId: e.target.value })} className="rounded-md border border-border bg-panel-raised px-2 py-1 text-[12.5px]" data-testid="profile-select">
+          <span className="shrink-0 text-text-2">Naming convention</span>
+          <select value={profileId} onChange={(e) => studio().setSettings({ profileId: e.target.value })} className="min-w-0 max-w-[62%] truncate rounded-md border border-border bg-panel-raised px-2 py-1 text-[12.5px]" data-testid="profile-select">
             {naming.PROFILES.map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}

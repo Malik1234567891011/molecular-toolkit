@@ -6,6 +6,7 @@ per-element confidences — exactly what the verification overlay needs. The res
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import os
@@ -87,16 +88,19 @@ VISION_TOOL = {
                 },
             },
             "notes": {"type": "string", "description": "Anything ambiguous (smudges, unclear labels, uncertain stereo)."},
+            "ring_sizes": {"type": "array", "items": {"type": "integer"}, "description": "The number of atoms in each ring you see in the drawing (count the vertices of each ring polygon)."},
+            "smiles": {"type": "string", "description": "The same structure written independently as a SMILES string (a second reading used to cross-check the atom list)."},
+            "name": {"type": "string", "description": "The compound's common or IUPAC name if you recognize it; empty string otherwise."},
         },
-        "required": ["found", "atoms", "bonds", "notes"],
+        "required": ["found", "atoms", "bonds", "notes", "ring_sizes", "smiles", "name"],
         "additionalProperties": False,
     },
 }
 
-VISION_PROMPT = """Read the chemical structure drawn in this image (a skeletal/line drawing, possibly handwritten). Report every heavy atom — including the unlabeled carbons at line ends and vertices — with its position in the image, and every bond between them with its order and any wedge/hash. Do not add hydrogens. Use low confidence for anything you are unsure of; a student will check your reading against the photo before using it."""
+VISION_PROMPT = """Read the chemical structure drawn in this image (a skeletal/line drawing, possibly handwritten). Report every heavy atom — including the unlabeled carbons at line ends and vertices — with its position in the image, and every bond between them with its order and any wedge/hash. Do not add hydrogens. Count the vertices of every ring polygon carefully (a benzene hexagon has exactly six). Also give the structure as SMILES and, if you recognize the compound, its name — these are used to cross-check your atom list. Use low confidence for anything you are unsure of; a student will check your reading against the photo before using it."""
 
 
-def _vision(data: bytes, media_type: str) -> dict[str, Any]:
+def _vision(data: bytes, media_type: str, retry_hint: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Multimodal fallback: the model proposes atoms and bonds; RDKit validates; the student verifies."""
     from . import tutor
 
@@ -105,6 +109,12 @@ def _vision(data: bytes, media_type: str) -> dict[str, Any]:
     import anthropic
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, default_headers={"anthropic-workspace-id": config.ANTHROPIC_WORKSPACE_ID} if config.ANTHROPIC_WORKSPACE_ID else None, max_retries=2, timeout=120.0)
+    messages: list[dict[str, Any]] = [{"role": "user", "content": [
+        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(data).decode("ascii")}},
+        {"type": "text", "text": VISION_PROMPT},
+    ]}]
+    if retry_hint:
+        messages += retry_hint
     msg = client.beta.messages.create(
         model=config.TUTOR_MODEL_LARGE,
         max_tokens=8000,
@@ -112,15 +122,12 @@ def _vision(data: bytes, media_type: str) -> dict[str, Any]:
         fallbacks="default",
         tools=[VISION_TOOL],
         tool_choice={"type": "tool", "name": "report_structure"},
-        messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(data).decode("ascii")}},
-            {"type": "text", "text": VISION_PROMPT},
-        ]}],
+        messages=messages,
     )
     block = next((b for b in msg.content if b.type == "tool_use"), None)
     if block is None or not isinstance(block.input, dict):
         raise HTTPException(502, "The recognizer returned no structure.")
-    return block.input
+    return {**block.input, "_tool_use_id": block.id}
 
 
 def _build(atoms: list[dict[str, Any]], bonds: list[dict[str, Any]], width: int, height: int) -> tuple[str, bool, str | None]:
@@ -166,8 +173,48 @@ def _build(atoms: list[dict[str, Any]], bonds: list[dict[str, Any]], width: int,
         return "", False, str(exc)
 
 
+async def _consistency(smiles: str, out: dict[str, Any]) -> list[str]:
+    """Cross-check the atom-by-atom reading against the reader's own ring count, SMILES and name.
+    A multimodal reader can miscount a ring while naming the compound correctly; disagreement
+    between its readings is the cue to look again (spec §12: if tools disagree, say so)."""
+    from rdkit import Chem
+    from .opsin import opsin
+
+    m = Chem.MolFromSmiles(smiles) if smiles else None
+    if m is None:
+        return []
+    problems: list[str] = []
+    graph_rings = sorted(len(r) for r in m.GetRingInfo().AtomRings())
+    reported = sorted(int(x) for x in (out.get("ring_sizes") or []) if isinstance(x, (int, float)))
+    if reported and graph_rings != reported:
+        problems.append(f"the atoms and bonds form rings of size {graph_rings or 'none'}, but the reader counted rings of size {reported}")
+    canon = Chem.MolToSmiles(m, isomericSmiles=False)
+    alt = Chem.MolFromSmiles(out.get("smiles") or "") if out.get("smiles") else None
+    if alt is not None and Chem.MolToSmiles(alt, isomericSmiles=False) != canon:
+        problems.append(f"its SMILES reading ({out.get('smiles')}) is a different structure from its atom-by-atom reading")
+    name = (out.get("name") or "").strip()
+    if name:
+        try:
+            r = await opsin.parse(name)
+            named = Chem.MolFromSmiles(r.smiles) if r.ok else None
+        except Exception:  # noqa: BLE001 — the name check is advisory
+            named = None
+        if named is None:
+            try:
+                from . import pubchem
+                cids = await pubchem.cids_for_name(name)
+                props = (await pubchem.properties_for_cids(cids[:1]))[0] if cids else None
+                smi = (props or {}).get("smiles") or (props or {}).get("isomericSmiles") or (props or {}).get("canonicalSmiles")
+                named = Chem.MolFromSmiles(smi) if smi else None
+            except Exception:  # noqa: BLE001
+                named = None
+        if named is not None and Chem.MolToSmiles(named, isomericSmiles=False) != canon:
+            problems.append(f"it identified the compound as {name}, but the structure it traced is not {name}")
+    return problems
+
+
 @router.post("/v1/structures/recognize-image")
-def recognize(body: RecognizeIn) -> dict[str, Any]:
+async def recognize(body: RecognizeIn) -> dict[str, Any]:
     st = status()
     if not st["available"]:
         # MolScribe missing: multimodal model proposes the graph instead (always verified by the student).
@@ -183,12 +230,32 @@ def recognize(body: RecognizeIn) -> dict[str, Any]:
         img = Image.open(io.BytesIO(data))
         width, height = img.size
         t0 = time.time()
-        out = _vision(data, media)
+        out = await asyncio.to_thread(_vision, data, media)
         atoms = out.get("atoms") or []
         bonds = out.get("bonds") or []
         if not out.get("found") or not atoms:
             return {"engine": "vision", "found": False, "atoms": [], "bonds": [], "notes": out.get("notes", ""), "image": {"width": width, "height": height}}
         smiles, valid, error = _build(atoms, bonds, width, height)
+        problems = await _consistency(smiles, out) if valid else []
+        reread = False
+        if problems:
+            # One second look, told exactly what disagreed.
+            hint = [
+                {"role": "assistant", "content": [{"type": "tool_use", "id": out["_tool_use_id"], "name": "report_structure", "input": {k: v for k, v in out.items() if not k.startswith("_")}}]},
+                {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": out["_tool_use_id"], "content": "Your readings disagree: " + "; ".join(problems) + ". Look at the image again, recount each ring's vertices, and report the structure again."},
+                ]},
+            ]
+            try:
+                again = await asyncio.to_thread(_vision, data, media, hint)
+                a2, b2 = again.get("atoms") or [], again.get("bonds") or []
+                s2, v2, e2 = _build(a2, b2, width, height) if a2 else ("", False, None)
+                if v2:
+                    p2 = await _consistency(s2, again)
+                    if len(p2) < len(problems):
+                        out, atoms, bonds, smiles, valid, error, problems, reread = again, a2, b2, s2, v2, e2, p2, True
+            except HTTPException:
+                pass
         return {
             "engine": "vision",
             "found": True,
@@ -199,6 +266,9 @@ def recognize(body: RecognizeIn) -> dict[str, Any]:
             "atoms": [{"index": i, "symbol": a.get("element"), "x": a.get("x"), "y": a.get("y"), "charge": a.get("charge", 0), "confidence": a.get("confidence")} for i, a in enumerate(atoms)],
             "bonds": [{"a": b.get("a"), "b": b.get("b"), "order": b.get("order", 1), "stereo": b.get("stereo", "none"), "confidence": b.get("confidence")} for b in bonds],
             "notes": out.get("notes", ""),
+            "readerName": out.get("name") or None,
+            "warnings": [f"The reader disagrees with itself: {p}. Check the highlighted drawing carefully against your photo." for p in problems],
+            "reread": reread,
             "seconds": round(time.time() - t0, 2),
             "note": "An AI reading of your photo — probabilistic, especially for stereo. Check every highlighted atom and bond before accepting. The image is not stored.",
         }
