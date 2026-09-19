@@ -291,7 +291,15 @@ function AtomInspector({ id }: { id: AtomId }) {
   const label = (k: string) => (k.includes('.h') ? 'H' : doc.atoms.find((x) => x.id === k)?.element ?? '?');
   const ringSize = perceiveRings(view).smallestRing(i);
   const avg = angles.length ? angles.reduce((s, x) => s + x.v, 0) / angles.length : null;
-  const why = avg !== null && g?.idealAngle ? explainAngle(doc, id, avg, ringSize) : [];
+  // Judge by the most deviant angle, not the average: 104° and 116° average to "ideal".
+  const worst = g?.idealAngle ? angles.reduce<{ a: string; b: string; v: number } | null>((w, x) => (!w || Math.abs(x.v - g.idealAngle!) > Math.abs(w.v - g.idealAngle!) ? x : w), null) : null;
+  const spread = angles.length > 1 ? { min: Math.min(...angles.map((x) => x.v)), max: Math.max(...angles.map((x) => x.v)) } : null;
+  const why = worst && g?.idealAngle
+    ? [
+        ...(spread && spread.max - spread.min > 3 ? [`Individual angles spread from ${spread.min.toFixed(1)}° to ${spread.max.toFixed(1)}° around the ideal ${g.idealAngle}°: larger groups push each other apart, so angles between them open up and angles to small hydrogens close.`] : []),
+        ...explainAngle(doc, id, worst.v, ringSize).filter((w) => !(spread && spread.max - spread.min > 3 && w.startsWith('Different substituents'))),
+      ]
+    : [];
   const cip = centre && centre.specified ? explainCip(doc, id, centre.priorities) : null;
   const narration = `Selected ${el.name}, atom ${id.slice(1)}, ${view.nbrs[i].length} bonds, formal charge ${atom.formalCharge}`;
   return (

@@ -43,6 +43,12 @@ export interface Verification {
   accepted: NameCandidate[];
   /** Names that failed round-trip (hidden under "unverified"). */
   unverified: NameCandidate[];
+  /**
+   * Database synonyms that parse to this structure but are not written the way the course
+   * teaches (CAS inverted index names, prefixes out of alphabetical order, stray hyphens).
+   * Shown for completeness under their own disclosure; never offered as answers.
+   */
+  other?: NameCandidate[];
   database?: { cid?: number; iupacName?: string; title?: string; synonyms?: string[] };
   ml?: { status: string; reason?: string };
   message?: string;

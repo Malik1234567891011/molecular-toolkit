@@ -10,6 +10,7 @@ import { track } from './analytics';
 import { studio, useStudio } from './store';
 import type { Analysis, NameCandidate, Verification } from './types';
 import { call } from './worker';
+import { synonymStyleIssue } from './synonyms';
 
 const verifyCache = new Map<string, Verification>();
 let analysisTimer: ReturnType<typeof setTimeout> | undefined;
@@ -193,6 +194,7 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
   }
   const accepted: NameCandidate[] = [];
   const unverified: NameCandidate[] = [];
+  const other: NameCandidate[] = [];
   let primary: NameCandidate | undefined;
   const alts = n?.alternatives ?? [];
   for (const c of res.course) {
@@ -225,9 +227,13 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
       systematic: 'PubChem synonym; OPSIN parses it to this exact structure',
       common: 'PubChem synonym (trivial or trade name, not structure-checked)',
     };
-    for (const syn of details.slice(0, 6)) {
+    for (const syn of details.slice(0, 8)) {
       if ([primary?.name, ...accepted.map((a) => a.name)].some((x) => x?.toLowerCase() === syn.name.toLowerCase())) continue;
-      accepted.push({ name: syn.name, provenance: 'accepted_common', source: 'pubchem', verified: syn.checked, note: NOTE[syn.kind] });
+      // A locant-bearing synonym the course engine does not produce is a systematic name written
+      // some other way; a tutor must not present it as an accepted answer (spec §9.3).
+      const issue = synonymStyleIssue(syn.name, syn.kind);
+      if (issue) other.push({ name: syn.name, provenance: 'accepted_common', source: 'pubchem', verified: syn.checked, note: issue });
+      else accepted.push({ name: syn.name, provenance: 'accepted_common', source: 'pubchem', verified: syn.checked, note: NOTE[syn.kind] });
     }
   }
   const out: Verification = {
@@ -236,6 +242,7 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
     primary,
     accepted,
     unverified,
+    other,
     database: db.status === 'found' ? { cid: db.cid, iupacName: db.iupacName, title: db.title, synonyms: db.synonyms } : undefined,
     ml: res.ml,
     message: !primary

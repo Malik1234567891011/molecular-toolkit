@@ -148,14 +148,15 @@ export function NameBar() {
           <span className="hidden shrink-0 sm:inline-flex"><ProvenanceBadge p={provenance} /></span>
         </>
       )}
-      {verification && (verification.accepted.length > 0 || verification.unverified.length > 0) && (
+      {verification && (verification.accepted.length > 0 || verification.unverified.length > 0 || (verification.other?.length ?? 0) > 0) && (
         <button onClick={() => setOpen((o) => !o)} className="hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[12px] text-text-2 hover:bg-panel-raised sm:flex" aria-expanded={open}>
-          +{verification.accepted.length} <I.ChevronDown size={14} />
+          {verification.accepted.length ? `+${verification.accepted.length}` : 'names'} <I.ChevronDown size={14} />
         </button>
       )}
       {open && verification && (
         <div className="glass fade-up absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[90vw] rounded-2xl p-3 text-sm">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">Accepted names for this structure</div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">{verification.accepted.length ? 'Accepted names for this structure' : 'Names for this structure'}</div>
+          {!verification.accepted.length && <p className="mb-2 text-[12.5px] text-text-2">The name above is the only accepted name in this course style.</p>}
           <ul className="space-y-1.5">
             {verification.accepted.map((c) => (
               <li key={c.name} className="flex items-start justify-between gap-3">
@@ -167,6 +168,19 @@ export function NameBar() {
               </li>
             ))}
           </ul>
+          {(verification.other?.length ?? 0) > 0 && (
+            <details className="mt-3 rounded-lg border border-border p-2">
+              <summary className="cursor-pointer text-[12px] text-text-2">Other names in databases ({verification.other!.length}) — not used as answers</summary>
+              <ul className="mt-1.5 space-y-1.5">
+                {verification.other!.map((c) => (
+                  <li key={c.name} className="text-[12.5px]">
+                    <div className="nomen text-text-2">{c.name}</div>
+                    {c.note && <div className="text-[11px] leading-snug text-text-3">{c.note}</div>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {verification.unverified.length > 0 && (
             <details className="mt-3 rounded-lg border border-border p-2">
               <summary className="cursor-pointer text-[12px] text-text-2">Unverified candidates ({verification.unverified.length}) — not used as answers</summary>
