@@ -3,7 +3,8 @@ import { mergeDocuments } from './builder.ts';
 import { CipRanker, parityForDescriptor, perceiveStereo, stereoNeighbourList } from './cip.ts';
 import { MolView } from './graph.ts';
 import { permutationParity } from './smiles.ts';
-import type { AtomId, BondId, BondOrder, Conformer, MoleculeDocument, StereoNeighbour, Vec2, Vec3 } from './types.ts';
+import type { AtomId, BondId, BondOrder, Conformer, MoleculeDocument, StereoNeighbour, TetrahedralStereo, Vec2, Vec3 } from './types.ts';
+import { doubleBondStereoFrom2D, stereoFromWedges } from './stereo-geometry.ts';
 
 /**
  * Graph edit commands. Every mutation of the canonical molecule goes through `applyCommand`,
@@ -29,7 +30,12 @@ export type EditCommand =
   | { type: 'addFragment'; fragment: MoleculeDocument; offset?: Vec2; fuse?: { existing: AtomId[]; fragment: AtomId[] }; bondFrom?: { atomId: AtomId; fragmentAtomId: AtomId; order: BondOrder } }
   | { type: 'replaceDocument'; doc: MoleculeDocument; label?: string }
   | { type: 'setTitle'; title: string }
-  | { type: 'setConformer'; conformer: Conformer; select?: boolean };
+  | { type: 'setConformer'; conformer: Conformer; select?: boolean }
+  /** Several edits as one undo step. */
+  | { type: 'batch'; commands: EditCommand[]; label: string }
+  /** Read E/Z of the given double bonds from their 2D drawing (2D editor edits). */
+  | { type: 'deriveStereo2D'; bondIds: BondId[] }
+  | { type: 'setAtomStereo'; atomId: AtomId; stereo: TetrahedralStereo | null };
 
 export interface CommandResult {
   doc: MoleculeDocument;
@@ -245,6 +251,15 @@ export function applyCommand(input: MoleculeDocument, cmd: EditCommand): Command
       }
       if (cmd.wedge) b.wedge = cmd.wedge;
       else delete b.wedge;
+      // Wedges are a depiction of the graph's configuration: derive the centre's stereo from them.
+      const derived = stereoFromWedges(doc, new Set([cmd.from])).doc;
+      const centre = derived.atoms.find((a) => a.id === cmd.from)!;
+      const target = doc.atoms.find((a) => a.id === cmd.from)!;
+      if (centre.stereo) target.stereo = centre.stereo;
+      else delete target.stereo;
+      if (centre.stereoUnknown) target.stereoUnknown = true;
+      else delete target.stereoUnknown;
+      if (!cmd.wedge && !doc.bonds.some((x) => x.a1 === cmd.from && x.wedge)) delete target.stereo;
       label = cmd.wedge === 'up' ? 'Wedge bond' : cmd.wedge === 'down' ? 'Hashed bond' : cmd.wedge === 'either' ? 'Wavy bond' : 'Plain bond';
       break;
     }
@@ -369,6 +384,37 @@ export function applyCommand(input: MoleculeDocument, cmd: EditCommand): Command
       doc.title = cmd.title;
       label = 'Rename';
       identityChanged = false;
+      break;
+    }
+    case 'batch': {
+      let cur = doc;
+      for (const c of cmd.commands) {
+        const r = applyCommand(cur, c);
+        cur = r.doc;
+        notes.push(...r.notes);
+        created.atoms.push(...r.created.atoms);
+        created.bonds.push(...r.created.bonds);
+      }
+      doc = cur;
+      label = cmd.label;
+      break;
+    }
+    case 'deriveStereo2D': {
+      const derived = doubleBondStereoFrom2D(doc, new Set(cmd.bondIds));
+      for (const b of derived.bonds) {
+        if (!cmd.bondIds.includes(b.id)) continue;
+        const t = doc.bonds.find((x) => x.id === b.id)!;
+        if (b.stereo) t.stereo = b.stereo;
+        else delete t.stereo;
+      }
+      label = 'Read E/Z from drawing';
+      break;
+    }
+    case 'setAtomStereo': {
+      const a = findAtom(cmd.atomId);
+      if (cmd.stereo) a.stereo = cmd.stereo;
+      else delete a.stereo;
+      label = 'Set configuration';
       break;
     }
     case 'setConformer': {

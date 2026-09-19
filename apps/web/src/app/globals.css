@@ -1,0 +1,245 @@
+@import "tailwindcss";
+
+/* Orbital design tokens — "precision instrument, not school software" (spec §15). */
+:root,
+:root[data-theme="dark"] {
+  --bg: #0b0e14;
+  --bg-lift: #161b27;
+  --bg-sunken: #080a0f;
+  --panel: rgba(17, 21, 30, 0.78);
+  --panel-solid: #11151e;
+  --panel-raised: #171c28;
+  --glass: rgba(20, 24, 34, 0.62);
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #e7e9ef;
+  --text-2: #a3abba;
+  --text-3: #6d7586;
+  --accent: #8b7cff;
+  --accent-strong: #a597ff;
+  --accent-soft: rgba(139, 124, 255, 0.16);
+  --accent-ink: #0b0e14;
+  --amber: #f2b34c;
+  --amber-soft: rgba(242, 179, 76, 0.16);
+  --danger: #ff5f6d;
+  --danger-soft: rgba(255, 95, 109, 0.15);
+  --good: #3ecf8e;
+  --good-soft: rgba(62, 207, 142, 0.14);
+  --focus: 0 0 0 2px rgba(139, 124, 255, 0.65);
+  --shadow: 0 10px 40px -12px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --canvas-grad: radial-gradient(1200px 800px at 50% 40%, #171c29 0%, #0e121a 45%, #0b0e14 100%);
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f4ef;
+  --bg-lift: #ffffff;
+  --bg-sunken: #ecebe5;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-solid: #ffffff;
+  --panel-raised: #fbfaf7;
+  --glass: rgba(255, 255, 255, 0.7);
+  --border: rgba(20, 20, 35, 0.09);
+  --border-strong: rgba(20, 20, 35, 0.16);
+  --text: #16181d;
+  --text-2: #4e5462;
+  --text-3: #858a96;
+  --accent: #5a48f0;
+  --accent-strong: #4332d6;
+  --accent-soft: rgba(90, 72, 240, 0.1);
+  --accent-ink: #ffffff;
+  --amber: #b77200;
+  --amber-soft: rgba(242, 179, 76, 0.2);
+  --danger: #d8263a;
+  --danger-soft: rgba(216, 38, 58, 0.1);
+  --good: #0f9a62;
+  --good-soft: rgba(15, 154, 98, 0.1);
+  --focus: 0 0 0 2px rgba(90, 72, 240, 0.5);
+  --shadow: 0 10px 40px -16px rgba(30, 30, 50, 0.25), 0 2px 8px rgba(30, 30, 50, 0.08);
+  --canvas-grad: radial-gradient(1200px 800px at 50% 40%, #ffffff 0%, #f8f6f1 50%, #f1efe8 100%);
+  --grid-line: rgba(20, 20, 35, 0.045);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --chart-grid: rgba(20, 20, 35, 0.09);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f4ef;
+    --bg-lift: #ffffff;
+    --bg-sunken: #ecebe5;
+    --panel: rgba(255, 255, 255, 0.82);
+    --panel-solid: #ffffff;
+    --panel-raised: #fbfaf7;
+    --glass: rgba(255, 255, 255, 0.7);
+    --border: rgba(20, 20, 35, 0.09);
+    --border-strong: rgba(20, 20, 35, 0.16);
+    --text: #16181d;
+    --text-2: #4e5462;
+    --text-3: #858a96;
+    --accent: #5a48f0;
+    --accent-strong: #4332d6;
+    --accent-soft: rgba(90, 72, 240, 0.1);
+    --accent-ink: #ffffff;
+    --amber: #b77200;
+    --amber-soft: rgba(242, 179, 76, 0.2);
+    --danger: #d8263a;
+    --danger-soft: rgba(216, 38, 58, 0.1);
+    --good: #0f9a62;
+    --good-soft: rgba(15, 154, 98, 0.1);
+    --canvas-grad: radial-gradient(1200px 800px at 50% 40%, #ffffff 0%, #f8f6f1 50%, #f1efe8 100%);
+    --grid-line: rgba(20, 20, 35, 0.045);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --chart-grid: rgba(20, 20, 35, 0.09);
+    color-scheme: light;
+  }
+}
+
+/* High-contrast accessibility mode */
+:root[data-contrast="high"] {
+  --border: rgba(255, 255, 255, 0.32);
+  --text-2: #d6dae3;
+  --text-3: #b3bac7;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-solid: var(--panel-solid);
+  --color-panel-raised: var(--panel-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+body {
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 6px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--shadow);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "zero", "ss02";
+}
+
+.nomen {
+  /* Nomenclature punctuation must not break lines: 2,3-dimethyl… */
+  font-feature-settings: "tnum";
+  hyphens: none;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  background: var(--bg-sunken);
+}
+
+.canvas-bg {
+  background: var(--canvas-grad);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up {
+  animation: fade-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 1ms !important;
+  transition-duration: 1ms !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

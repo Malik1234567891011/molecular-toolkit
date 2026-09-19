@@ -1337,3 +1337,17 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     profileId: ctx.profile.id,
   };
 }
+
+/**
+ * Name the group containing `rootId` when its bond to `fromId` is cut (e.g. the alkyl of an
+ * ether or alcohol), as a substituent prefix. Used for functional-class alternatives.
+ */
+export function nameGroup(input: MoleculeDocument, rootId: AtomId, fromId: AtomId, profile: NamingProfile = PROFILE_2013): string {
+  const doc = prepareForNaming(input);
+  const ctx = makeCtx(doc, profile);
+  const root = ctx.view.idx(rootId);
+  const from = ctx.view.idx(fromId);
+  const atoms = collectBranch(ctx, new Set(doc.atoms.map((_, i) => i)), root, from);
+  const order = bondOrder(ctx, root, from) as 1 | 2 | 3;
+  return nameSubstituent(ctx, atoms, root, from, order, 1).text;
+}
