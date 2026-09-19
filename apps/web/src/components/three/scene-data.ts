@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { MolView, type AtomId, type MoleculeDocument, type Vec3 } from '@orbital/chem';
 import { element } from '@orbital/chem';
 import type { RenderStyle } from '@/lib/store';
@@ -73,4 +74,36 @@ export function boundingSphere(coords: Record<string, Vec3>): { center: Vec3; ra
   let r = 0;
   for (const k of keys) r = Math.max(r, Math.hypot(coords[k][0] - c[0], coords[k][1] - c[1], coords[k][2] - c[2]));
   return { center: c, radius: Math.max(r + 1.2, 2.5) };
+}
+
+/**
+ * Rotation that turns a point cloud face-on: smallest-variance axis → +z (toward the viewer),
+ * largest-variance axis → +x (landscape). Flat molecules then read like their drawings.
+ */
+export function faceOnQuaternion(points: THREE.Vector3[]): THREE.Quaternion {
+  if (points.length < 3) return new THREE.Quaternion();
+  const c = points.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / points.length);
+  const m = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (const p of points) {
+    const d = [p.x - c.x, p.y - c.y, p.z - c.z];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m[i * 3 + j] += d[i] * d[j];
+  }
+  const mul = (A: number[], v: THREE.Vector3) => new THREE.Vector3(A[0] * v.x + A[1] * v.y + A[2] * v.z, A[3] * v.x + A[4] * v.y + A[5] * v.z, A[6] * v.x + A[7] * v.y + A[8] * v.z);
+  const power = (A: number[], seed: THREE.Vector3) => {
+    let v = seed.clone().normalize();
+    for (let k = 0; k < 80; k++) {
+      const n = mul(A, v);
+      if (n.lengthSq() < 1e-12) break;
+      v = n.normalize();
+    }
+    return v;
+  };
+  const tr = m[0] + m[4] + m[8];
+  const shifted = m.map((x, k) => (k % 4 === 0 ? tr - x : -x));
+  const normal = power(shifted, new THREE.Vector3(0.3, 0.4, 0.85));
+  const q1 = new THREE.Quaternion().setFromUnitVectors(normal, new THREE.Vector3(0, 0, 1));
+  const major = power(m, new THREE.Vector3(0.9, 0.2, 0.1)).applyQuaternion(q1);
+  const angle = Math.atan2(major.y, major.x);
+  const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -angle);
+  return q2.multiply(q1);
 }

@@ -5,10 +5,10 @@ import { ContactShadows, Environment, Lightformer, OrbitControls } from '@react-
 import * as THREE from 'three';
 import { MolView, type MoleculeDocument } from '@orbital/chem';
 import { atomColor } from '@/lib/colors';
-import { atomRadius, boundingSphere } from './scene-data';
+import { atomRadius, boundingSphere, faceOnQuaternion } from './scene-data';
 
 /** Read-only molecule viewer (landing hero, share pages, embeds). */
-export function Viewer({ doc, theme, autoRotate = true, height = '100%', interactive = true }: { doc: MoleculeDocument; theme: 'dark' | 'light'; autoRotate?: boolean; height?: string | number; interactive?: boolean }) {
+export function Viewer({ doc, theme, autoRotate = true, height = '100%', interactive = true, orient = true }: { doc: MoleculeDocument; theme: 'dark' | 'light'; autoRotate?: boolean; height?: string | number; interactive?: boolean; orient?: boolean }) {
   const conf = doc.conformers.find((c) => c.id === doc.selectedConformerId) ?? doc.conformers[0];
   const { center, radius } = useMemo(() => boundingSphere(conf?.coordinates ?? {}), [conf]);
   const items = useMemo(() => {
@@ -16,9 +16,11 @@ export function Viewer({ doc, theme, autoRotate = true, height = '100%', interac
     const view = new MolView(doc);
     const atoms: Array<{ p: THREE.Vector3; r: number; c: string }> = [];
     const bonds: Array<{ a: THREE.Vector3; b: THREE.Vector3; ca: string; cb: string; order: number }> = [];
+    const all = Object.values(conf.coordinates).map((p) => new THREE.Vector3(p[0] - center[0], p[1] - center[1], p[2] - center[2]));
+    const face = orient ? faceOnQuaternion(all) : new THREE.Quaternion();
     const P = (k: string) => {
       const p = conf.coordinates[k];
-      return p ? new THREE.Vector3(p[0] - center[0], p[1] - center[1], p[2] - center[2]) : null;
+      return p ? new THREE.Vector3(p[0] - center[0], p[1] - center[1], p[2] - center[2]).applyQuaternion(face) : null;
     };
     doc.atoms.forEach((a, i) => {
       const p = P(a.id);
@@ -40,7 +42,7 @@ export function Viewer({ doc, theme, autoRotate = true, height = '100%', interac
       bonds.push({ a: p, b: q, ca: atomColor(e1, theme), cb: atomColor(e2, theme), order: b.order });
     }
     return { atoms, bonds };
-  }, [doc, conf, center, theme]);
+  }, [doc, conf, center, theme, orient]);
   return (
     <div style={{ height }} className="w-full">
       <Canvas dpr={[1, 2]} camera={{ position: [0, 0, radius * 3.1], fov: 32 }} gl={{ alpha: true, antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}>
@@ -74,7 +76,7 @@ export function Viewer({ doc, theme, autoRotate = true, height = '100%', interac
           ];
         })}
         <ContactShadows position={[0, -radius - 0.2, 0]} opacity={theme === 'dark' ? 0.5 : 0.3} scale={radius * 5} blur={2.6} far={radius * 3} />
-        <OrbitControls autoRotate={autoRotate} autoRotateSpeed={0.9} enableZoom={interactive} enablePan={false} enableRotate={interactive} />
+        <OrbitControls autoRotate={autoRotate} autoRotateSpeed={0.6} enableZoom={interactive} enablePan={false} enableRotate={interactive} />
       </Canvas>
     </div>
   );

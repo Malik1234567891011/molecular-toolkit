@@ -10,6 +10,7 @@ import { useStudio, studio } from '@/lib/store';
 import { addAtomTo, connectAtoms, cycleBondOrder } from '@/lib/edit';
 import { bus } from '@/lib/events';
 import { useResolvedTheme } from '@/lib/useTheme';
+import { captureRef } from '@/lib/capture';
 import { MoleculeMesh, displayPositions, type PickHandlers } from './MoleculeMesh';
 import { boundingSphere, type RAtom, type RBond } from './scene-data';
 import { Overlays } from './Overlays';
@@ -99,6 +100,20 @@ function CameraRig() {
     const t = setTimeout(() => bus.emit('fit', 'orient'), 60);
     return () => clearTimeout(t);
   }, [controls]);
+  return null;
+}
+
+/** Exposes the renderer to image/animation export (lib/capture). */
+function CaptureBridge() {
+  const { gl, scene, camera } = useThree();
+  const controls = useThree((s) => s.controls) as unknown as OrbitControlsImpl | null;
+  const advance = useThree((s) => s.advance);
+  useEffect(() => {
+    captureRef.current = { gl, scene, camera, controls, advance: () => advance(performance.now(), true) };
+    return () => {
+      if (captureRef.current?.gl === gl) captureRef.current = null;
+    };
+  }, [gl, scene, camera, controls, advance]);
   return null;
 }
 
@@ -269,13 +284,14 @@ function Scene() {
   return (
     <>
       <CameraRig />
+      <CaptureBridge />
       <Lights theme={theme} />
       <MoleculeMesh handlers={handlers} />
       <GeometryGuides />
       <Overlays />
       {mode === 'conformer' && <RotationHandle onInteract={setInteracting} />}
       {drag && dragPoint && <DragGhost from={drag.parent} to={dragPoint} />}
-      {doc.atoms.length > 0 && <ContactShadows position={[0, bottom, 0]} opacity={theme === 'dark' ? 0.55 : 0.32} scale={30} blur={2.8} far={14} resolution={512} color={theme === 'dark' ? '#000000' : '#3a3550'} frames={reduced ? 1 : Infinity} />}
+      {doc.atoms.length > 0 && <group userData={{ noExport: true }}><ContactShadows position={[0, bottom, 0]} opacity={theme === 'dark' ? 0.55 : 0.32} scale={30} blur={2.8} far={14} resolution={512} color={theme === 'dark' ? '#000000' : '#3a3550'} frames={reduced ? 1 : Infinity} /></group>}
       <OrbitControls
         makeDefault
         enableDamping

@@ -247,6 +247,46 @@ def get_share(sid: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------------------------
+# AR assets: USDZ (iOS Quick Look) and GLB (Android Scene Viewer) need a real https URL.
+# Files are anonymous, content-addressed, and deleted after 24 hours.
+
+AR_DIR = config.DATA_DIR / "ar"
+AR_DIR.mkdir(parents=True, exist_ok=True)
+AR_TYPES = {"usdz": "model/vnd.usdz+zip", "glb": "model/gltf-binary"}
+
+
+@app.post("/v1/ar-assets")
+async def upload_ar_asset(request: Request, ext: str) -> dict[str, Any]:
+    import hashlib
+
+    if ext not in AR_TYPES:
+        raise HTTPException(400, "ext must be usdz or glb")
+    body = await request.body()
+    if not body or len(body) > 20_000_000:
+        raise HTTPException(413, "Asset missing or larger than 20 MB")
+    now = time.time()
+    for f in AR_DIR.iterdir():
+        if now - f.stat().st_mtime > 24 * 3600:
+            f.unlink(missing_ok=True)
+    name = f"{hashlib.sha256(body).hexdigest()[:20]}.{ext}"
+    (AR_DIR / name).write_bytes(body)
+    return {"name": name, "url": f"/api/v1/ar-assets/{name}", "expires": now + 24 * 3600}
+
+
+@app.get("/v1/ar-assets/{name}")
+def get_ar_asset(name: str):
+    from fastapi.responses import FileResponse
+
+    stem, _, ext = name.partition(".")
+    if ext not in AR_TYPES or not stem.isalnum():
+        raise HTTPException(404, "Not found")
+    path = AR_DIR / name
+    if not path.exists():
+        raise HTTPException(404, "This AR model expired; open it again from Orbital.")
+    return FileResponse(path, media_type=AR_TYPES[ext], headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ---------------------------------------------------------------------------------------------
 # Analytics (no raw AI conversations are logged)
 
 

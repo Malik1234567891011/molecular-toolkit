@@ -16,6 +16,7 @@ import { Landing } from './Landing';
 import { Notices } from './Notices';
 import { Shortcuts } from './Shortcuts';
 import { Coach } from './Coach';
+import { ShareDialog } from './ShareDialog';
 
 export function Studio() {
   useApplyTheme();
@@ -30,6 +31,20 @@ export function Studio() {
       setReady(true);
       track(had ? 'return_session' : 'studio_opened', {});
       if (had) setTimeout(() => bus.emit('fit', 'instant'), 300);
+      // "Open in the studio" from a share page (?open=<id>): the snapshot becomes an editable copy.
+      const openId = new URLSearchParams(location.search).get('open');
+      if (openId) {
+        history.replaceState(null, '', location.pathname);
+        try {
+          const { loadShare } = await import('@/lib/share');
+          const r = await loadShare(openId);
+          useStudio.getState().replace(r.snapshot.doc, `Open shared ${r.snapshot.name ?? 'molecule'}`);
+          useStudio.setState({ landing: false });
+          setTimeout(() => bus.emit('fit', 'orient'), 300);
+        } catch {
+          useStudio.getState().notify({ kind: 'warning', text: 'That shared molecule could not be opened (the link may be wrong or offline).' });
+        }
+      }
       // Shared problem set link (#set=…): save it locally and open practice.
       if (location.hash.startsWith('#set=')) {
         const { decodeSet, saveSet, loadProgress } = await import('@/lib/practice');
@@ -51,6 +66,9 @@ export function Studio() {
       loadStructure,
       practice: () => import('@/lib/practice'),
       tutor: () => import('@/lib/tutor'),
+      capture: () => import('@/lib/capture'),
+      export3d: () => import('@/lib/export3d'),
+      share: () => import('@/lib/share'),
     };
   }, []);
   return (
@@ -67,6 +85,7 @@ export function Studio() {
       </div>
       <Notices />
       <Shortcuts />
+      <ShareDialog />
     </div>
   );
 }
