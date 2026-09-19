@@ -111,9 +111,12 @@ export async function compute(): Promise<void> {
   const [method, basis] = useOrbitals.getState().method.split('/');
   lastKey = geometryKey();
   const key = lastKey + `|${useOrbitals.getState().method}`;
-  useOrbitals.setState({ status: 'queued', error: null, result: null, meshes: [], forKey: key });
+  useOrbitals.setState({ status: 'running', error: null, result: null, meshes: [], forKey: key });
   try {
-    const sub = await api<{ id: string; status: string }>('/quantum/submit', { atoms, charge, multiplicity: radicals % 2 ? 2 : 1, method, basis, outputs: ['homo', 'lumo', 'density', 'esp'], spacing: atoms.length > 30 ? 0.35 : 0.28 }, { timeout: 20000 });
+    // Hosted, the server computes inside this request (its instances can't keep background
+    // work), so the submit can take as long as the calculation: up to the 5-minute limit.
+    const sub = await api<{ id: string; status: string }>('/quantum/submit', { atoms, charge, multiplicity: radicals % 2 ? 2 : 1, method, basis, outputs: ['homo', 'lumo', 'density', 'esp'], spacing: atoms.length > 30 ? 0.35 : 0.28 }, { timeout: 300000 });
+    if (useOrbitals.getState().forKey !== key) return; // superseded
     for (let tries = 0; tries < 400; tries++) {
       const r = await api<{ status: string; result?: QuantumResult; error?: string }>(`/quantum/${sub.id}`, undefined, { timeout: 15000 });
       if (useOrbitals.getState().forKey !== key) return; // superseded

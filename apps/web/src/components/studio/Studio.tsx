@@ -4,6 +4,7 @@ import { useStudio } from '@/lib/store';
 import { startPipeline } from '@/lib/pipeline';
 import { restore, startAutosave } from '@/lib/persist';
 import { warmUp } from '@/lib/worker';
+import { tryApi } from '@/lib/api';
 import { useApplyTheme } from '@/lib/useTheme';
 import { track } from '@/lib/analytics';
 import { bus } from '@/lib/events';
@@ -46,6 +47,9 @@ export function Studio() {
   }, []);
   useEffect(() => {
     warmUp();
+    // Hosted, the chemistry API scales to zero when idle and takes a few seconds to start; wake
+    // it now so the first name lookup doesn't pay for that.
+    void tryApi('/health', undefined, { timeout: 30000 });
     void (async () => {
       const had = await restore();
       startPipeline();

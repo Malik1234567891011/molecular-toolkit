@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import secrets
 import time
 from typing import Any
@@ -29,7 +30,12 @@ except Exception:  # noqa: BLE001
     _AVAILABLE = False
 
 BOHR = 0.52917721092
+MAX_MEMORY_MB = int(os.environ.get("ORBITAL_QUANTUM_MAX_MEMORY_MB", "900"))
+# Hosted instances (2 GB, one vCPU, 5-minute requests) cap the basis size: memory grows about
+# with its cube. Measured peaks: 251 functions HF/3-21G ≈ 1.2 GB, 230 B3LYP/6-31G* ≈ 1.4 GB.
+MAX_NAO = {"HF": int(os.environ.get("ORBITAL_QUANTUM_MAX_NAO_HF", "0")), "B3LYP": int(os.environ.get("ORBITAL_QUANTUM_MAX_NAO_B3LYP", "0"))}
 _queue: asyncio.Queue[str] | None = None
+_one_at_a_time = asyncio.Semaphore(1)
 _worker: asyncio.Task | None = None
 
 
@@ -78,12 +84,23 @@ def _run(req: dict[str, Any]) -> dict[str, Any]:
         spin=int(req.get("multiplicity", 1)) - 1,
         unit="Angstrom",
         verbose=0,
+        # PySCF sizes its work blocks to max_memory (4 GB by default); hosted instances have
+        # 2 GB in all, shared with RDKit and the OPSIN JVM.
+        max_memory=MAX_MEMORY_MB,
     )
+    cap = MAX_NAO.get(method, 0)
+    if cap and mol.nao > cap:
+        hint = "HF / STO-3G" if basis != "sto-3g" else "a smaller molecule"
+        raise ValueError(f"This molecule is too large for {method}/{basis} on this server ({mol.nao} basis functions; the limit is {cap}). Try {hint}.")
     if method == "B3LYP":
         mf = dft.RKS(mol) if mol.spin == 0 else dft.UKS(mol)
         mf.xc = "b3lyp"
     else:
         mf = scf.RHF(mol) if mol.spin == 0 else scf.UHF(mol)
+    # Density fitting: a few MB of three-index integrals instead of nao⁴ in memory (or
+    # recomputing them every cycle), several times faster on one vCPU; the error it adds is far
+    # below what a teaching surface can show.
+    mf = mf.density_fit()
     mf.max_cycle = 150
     mf.kernel()
     if not mf.converged:
@@ -98,18 +115,32 @@ def _run(req: dict[str, Any]) -> dict[str, Any]:
     spacing = float(max(0.2, min(0.6, req.get("spacing", 0.3))))
     pts_ang, dims, origin = _grid(coords_ang, spacing)
     pts_bohr = pts_ang / BOHR
-    ao = mol.eval_gto("GTOval", pts_bohr)
     grids: dict[str, Any] = {}
     outputs = set(req.get("outputs", []))
-    if "homo" in outputs:
-        grids["homo"] = _encode(ao @ mo_coeff[:, homo])
-    if "lumo" in outputs and lumo is not None:
-        grids["lumo"] = _encode(ao @ mo_coeff[:, lumo])
     dm = mf.make_rdm1()
     if mol.spin != 0:
         dm = dm[0] + dm[1]
-    if "density" in outputs or "esp" in outputs:
-        rho = np.einsum("pi,ij,pj->p", ao, dm, ao, optimize=True)
+    want_rho = "density" in outputs or "esp" in outputs
+    homo_v = np.zeros(len(pts_bohr)) if "homo" in outputs else None
+    lumo_v = np.zeros(len(pts_bohr)) if "lumo" in outputs and lumo is not None else None
+    rho = np.zeros(len(pts_bohr)) if want_rho else None
+    # Orbital values on the grid, a slab of points at a time (the whole grid × every basis
+    # function would be hundreds of MB).
+    step = max(1000, int(40e6 / (8 * mol.nao)))
+    for i0 in range(0, len(pts_bohr), step):
+        ao = mol.eval_gto("GTOval", pts_bohr[i0 : i0 + step])
+        if homo_v is not None:
+            homo_v[i0 : i0 + step] = ao @ mo_coeff[:, homo]
+        if lumo_v is not None:
+            lumo_v[i0 : i0 + step] = ao @ mo_coeff[:, lumo]
+        if rho is not None:
+            rho[i0 : i0 + step] = np.einsum("pi,pi->p", ao @ dm, ao)
+        del ao
+    if homo_v is not None:
+        grids["homo"] = _encode(homo_v)
+    if lumo_v is not None:
+        grids["lumo"] = _encode(lumo_v)
+    if rho is not None:
         grids["density"] = _encode(rho)
     esp_meta = None
     if "esp" in outputs:
@@ -124,9 +155,12 @@ def _run(req: dict[str, Any]) -> dict[str, Any]:
             d = np.linalg.norm(epts - ri, axis=1)
             nuc += zi / np.maximum(d, 1e-6)
         ele = np.zeros(len(epts))
-        for i0 in range(0, len(epts), 600):
-            ints = mol.intor("int1e_grids", grids=epts[i0 : i0 + 600])
-            ele[i0 : i0 + 600] = np.einsum("gij,ij->g", ints, dm)
+        # Each point's integrals are nao² doubles: keep a chunk near 150 MB.
+        chunk = max(20, min(600, int(150e6 / (8 * mol.nao * mol.nao))))
+        for i0 in range(0, len(epts), chunk):
+            ints = mol.intor("int1e_grids", grids=epts[i0 : i0 + chunk])
+            ele[i0 : i0 + chunk] = np.einsum("gij,ij->g", ints, dm)
+            del ints
         esp = nuc - ele  # hartree/e
         grids["esp"] = _encode(esp)
         esp_meta = {"dims": edims, "origin": eorigin.tolist(), "spacing": esp_spacing, "unit": "hartree/e"}
@@ -166,7 +200,9 @@ async def _execute(jid: str) -> None:
         return
     store.job_update(jid, "running")
     try:
-        result = await asyncio.to_thread(_run, json.loads(job["request"]))
+        # One calculation at a time per instance: two at once could exceed its memory.
+        async with _one_at_a_time:
+            result = await asyncio.to_thread(_run, json.loads(job["request"]))
         store.job_update(jid, "done", result=json.dumps(result))
     except Exception as exc:  # noqa: BLE001
         store.job_update(jid, "failed", error=str(exc))
@@ -180,6 +216,15 @@ def _ensure_worker() -> None:
         _worker = asyncio.create_task(_worker_loop())
 
 
+# Hosted, a job runs inside its submit request, which the platform ends at 5 minutes; a job
+# still marked unfinished well after that was cut off, and is reported (and re-run) as such.
+HOSTED_LIMIT_S = 300
+
+
+def _cut_off(job: dict[str, Any]) -> bool:
+    return store.backend() == "redis" and job["status"] in ("queued", "running") and time.time() - (job.get("updated") or 0) > HOSTED_LIMIT_S + 30
+
+
 @router.post("/v1/quantum/submit")
 async def submit(body: QuantumIn) -> dict[str, Any]:
     if not _AVAILABLE:
@@ -191,7 +236,7 @@ async def submit(body: QuantumIn) -> dict[str, Any]:
 
     digest = hashlib.sha256(key.encode()).hexdigest()[:24]
     prev = store.job_get(digest)
-    if prev and prev["status"] in ("done", "queued", "running"):
+    if prev and prev["status"] in ("done", "queued", "running") and not _cut_off(prev):
         return {"id": digest, "status": prev["status"], "cached": prev["status"] == "done"}
     store.job_put(digest, "quantum", "queued", json.dumps(body.model_dump()))
     if store.backend() == "redis":
@@ -213,6 +258,8 @@ async def status(jid: str) -> dict[str, Any]:
     if not job:
         raise HTTPException(404, "No such job")
     st, result, error, created, updated = job["status"], job["result"], job["error"], job["created"], job["updated"]
+    if _cut_off(job):
+        st, error = "failed", "The calculation ran out of time on the server. Try HF / STO-3G, or a smaller molecule."
     out: dict[str, Any] = {"id": jid, "status": st, "elapsed": round(updated - created, 1)}
     if st == "done":
         out["result"] = json.loads(result)

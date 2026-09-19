@@ -13,6 +13,19 @@ const SURFACES: Array<{ id: Surface; label: string; sub: string }> = [
   { id: 'esp', label: 'ESP', sub: 'electrostatic potential' },
 ];
 
+/** Whole seconds since `on` became true (0 while off). */
+function useElapsed(on: boolean): number {
+  const [s, setS] = useState(0);
+  useEffect(() => {
+    setS(0);
+    if (!on) return;
+    const t0 = Date.now();
+    const id = setInterval(() => setS(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [on]);
+  return s;
+}
+
 export function OrbitalsPanel() {
   const st = useOrbitals();
   const hasMol = useStudio((s) => s.doc.atoms.length > 0);
@@ -48,6 +61,7 @@ export function OrbitalsPanel() {
   if (!hasMol) return <p className="p-4 text-[13px] text-text-2">Load or build a molecule, then compute its orbitals.</p>;
   const r = st.result;
   const busy = st.status === 'queued' || st.status === 'running';
+  const elapsed = useElapsed(busy);
   return (
     <div className="scroll-thin min-h-0 flex-1 space-y-4 overflow-y-auto p-4" data-testid="orbitals-panel">
       <p className="text-[12.5px] leading-relaxed text-text-2">A quantum-chemistry calculation on the current 3D geometry: molecular orbitals, electron density and the electrostatic potential, shown on the model.</p>
@@ -55,13 +69,13 @@ export function OrbitalsPanel() {
         <label className="flex items-center justify-between text-[12.5px]">
           <span className="text-text-2">Method</span>
           <select value={st.method} onChange={(e) => useOrbitals.setState({ method: e.target.value as typeof st.method })} className="rounded-md border border-border bg-panel-raised px-2 py-1 text-[12.5px]" data-testid="orb-method">
-            <option value="HF/sto-3g">HF / STO-3G — seconds</option>
+            <option value="HF/sto-3g">HF / STO-3G — fastest</option>
             <option value="HF/3-21g">HF / 3-21G — better</option>
             <option value="B3LYP/6-31g*" disabled={heavy > 30}>B3LYP / 6-31G* — best (≤30 atoms)</option>
           </select>
         </label>
         <button onClick={() => void compute()} disabled={busy} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent py-2 text-[13px] font-semibold text-accent-ink disabled:opacity-60" data-testid="orb-compute">
-          <I.Orbital size={15} /> {busy ? (st.status === 'queued' ? 'Queued…' : 'Calculating…') : r ? 'Recalculate' : 'Compute orbitals'}
+          <I.Orbital size={15} /> {busy ? `${st.status === 'queued' ? 'Queued' : 'Calculating'}… ${elapsed >= 2 ? `${elapsed} s` : ''}` : r ? 'Recalculate' : 'Compute orbitals'}
         </button>
         {st.error && <p className="text-[12.5px] text-danger" data-testid="orb-error">{st.error}</p>}
       </div>

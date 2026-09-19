@@ -19,7 +19,9 @@ ENV JAVA_HOME=/opt/java/openjdk \
     PYTHONUNBUFFERED=1 \
     ORBITAL_DATA_DIR=/tmp/orbital \
     OPSIN_DIR=/app/opsin \
-    OMP_NUM_THREADS=1
+    OMP_NUM_THREADS=1 \
+    ORBITAL_QUANTUM_MAX_NAO_HF=260 \
+    ORBITAL_QUANTUM_MAX_NAO_B3LYP=235
 
 WORKDIR /app
 COPY requirements.txt ./
