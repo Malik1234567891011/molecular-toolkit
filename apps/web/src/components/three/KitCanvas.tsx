@@ -320,7 +320,22 @@ function DragGhost({ from, to }: { from: AtomId; to: THREE.Vector3 }) {
 export default function KitCanvas() {
   const theme = useResolvedTheme();
   const [lost, setLost] = useState(false);
+  const [generation, setGeneration] = useState(0);
+  const retried = useRef(0);
   const [palette, setPalette] = useState<PaletteRequest | null>(null);
+  // Give the browser a moment to restore a lost context; otherwise remount once automatically.
+  useEffect(() => {
+    if (!lost) return;
+    const now = Date.now();
+    if (document.visibilityState === 'visible' && now - retried.current > 10000) {
+      retried.current = now;
+      const t = setTimeout(() => {
+        setLost(false);
+        setGeneration((g) => g + 1);
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [lost]);
   useEffect(() => {
     const a = bus.on('palette:open', (r) => setPalette(r as PaletteRequest));
     const b = bus.on('palette:close', () => setPalette(null));
@@ -333,9 +348,17 @@ export default function KitCanvas() {
     <div className="relative h-full w-full" data-testid="kit-canvas">
       {palette && <MiniPalette req={palette} onClose={() => setPalette(null)} />}
       {lost ? (
-        <div className="absolute inset-0 grid place-items-center text-sm text-text-2">The 3D view lost its graphics context. The 2D editor still works — switch to 2D, or reload to restore 3D.</div>
+        <div className="absolute inset-0 grid place-items-center px-6 text-center">
+          <div className="max-w-[320px] space-y-2 text-sm text-text-2">
+            <p>The 3D view lost its graphics context (the GPU was reset or reclaimed). Your molecule is safe, and the 2D editor still works.</p>
+            <button onClick={() => { setLost(false); setGeneration((g) => g + 1); }} className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink" data-testid="restore-3d">
+              Restore 3D
+            </button>
+          </div>
+        </div>
       ) : (
         <Canvas
+          key={generation}
           dpr={[1, 2]}
           gl={{ antialias: false, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: theme === 'dark' ? 1.05 : 0.95 }}
           camera={{ position: [0, 0, 16], fov: 32, near: 0.1, far: 500 }}
@@ -346,10 +369,12 @@ export default function KitCanvas() {
             }
           }}
           onCreated={({ gl }) => {
+            let timer: ReturnType<typeof setTimeout> | undefined;
             gl.domElement.addEventListener('webglcontextlost', (ev) => {
               ev.preventDefault();
-              setLost(true);
+              timer = setTimeout(() => setLost(true), 1200);
             });
+            gl.domElement.addEventListener('webglcontextrestored', () => clearTimeout(timer));
           }}
         >
           <Suspense fallback={null}>

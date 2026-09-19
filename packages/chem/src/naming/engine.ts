@@ -1184,7 +1184,7 @@ function blankTrace(ctx: Ctx, name: string, tokens: NameToken[]): NamingTrace {
   return {
     name, status: 'pending_verification',
     principalGroup: { kind: null, label: 'none', atomIds: [], present: [], explanation: '' },
-    parent: { atomIds: [], root: '', kind: 'chain', label: '', alternatives: [], explanation: '' },
+    parent: { atomIds: [], root: '', kind: 'chain', label: '', alternatives: [], equivalents: [], explanation: '' },
     numbering: { orderedAtomIds: [], reason: '', locantOf: {} },
     substituents: [], stereo: [], unspecifiedStereo: [], assembly: [name], tokens, engineVersion: ENGINE_VERSION, profileId: ctx.profile.id,
   };
@@ -1260,6 +1260,7 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
 
   const winner = scores(ctx, c);
   const alts: ParentAlternative[] = [];
+  const equivalents: AtomId[][] = [];
   const seen = new Set<string>([[...c.atoms].sort((p, q) => p - q).join(',')]);
   for (const x of r.candidates) {
     if (x === c) continue;
@@ -1268,7 +1269,10 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     seen.add(key);
     const cmp = compareScores(winner, scores(ctx, x));
     // Every criterion tied: an equivalent (symmetry-related) choice that yields the same name.
-    if (!cmp.criterion) continue;
+    if (!cmp.criterion) {
+      equivalents.push(x.atoms.map(id));
+      continue;
+    }
     const crit = cmp.criterion;
     const fmt = (v: number | number[] | undefined) => (Array.isArray(v) ? v.join(',') : String(v ?? ''));
     alts.push({
@@ -1335,7 +1339,7 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     parent: {
       atomIds: c.atoms.map(id),
       root: c.ring ? c.ring.hydride(b.n).stem + (c.ring.hydride(b.n).complete ? '' : 'ane') : chainStem(c.atoms.length) + 'ane',
-      kind: c.kind, label: c.label, alternatives: topAlts, explanation: parentText,
+      kind: c.kind, label: c.label, alternatives: topAlts, equivalents, explanation: parentText,
     },
     numbering: { orderedAtomIds: b.n.atoms.map(id), reason, alternative, locantOf },
     substituents: r.substituents,

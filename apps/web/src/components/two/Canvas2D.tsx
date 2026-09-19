@@ -56,7 +56,14 @@ export default function Canvas2D() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState<View2D>({ scale: 40, cx: 0, cy: 0 });
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  // Pointer up can arrive before React re-renders after pointer down (fast taps, stylus, tests):
+  // the handlers read the live gesture from a ref, the state only drives the preview.
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (d: Drag | null) => {
+    dragRef.current = d;
+    setDragState(d);
+  };
   const fitDone = useRef(false);
 
   useEffect(() => {
@@ -277,6 +284,8 @@ export default function Canvas2D() {
   // --------------------------------------------------------------------------------------------
   // Pointer handling
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    // Once the student is drawing, never re-fit under their cursor (loads still fit).
+    fitDone.current = true;
     const rect = svgRef.current!.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -341,6 +350,7 @@ export default function Canvas2D() {
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const w = toWorld(sx, sy);
+    const drag = dragRef.current;
     if (!drag) {
       const a = atomAt(w);
       const b = a ? null : bondAt(w);
@@ -359,7 +369,7 @@ export default function Canvas2D() {
   };
 
   const onPointerUp = () => {
-    const d = drag;
+    const d = dragRef.current;
     setDrag(null);
     if (!d) return;
     const s = studio();

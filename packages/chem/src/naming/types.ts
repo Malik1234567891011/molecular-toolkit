@@ -73,6 +73,8 @@ export interface NamingTrace {
     kind: 'chain' | 'ring';
     label: string;
     alternatives: ParentAlternative[];
+    /** Other choices that tie on every rule (symmetry-related); each gives the same name. */
+    equivalents: AtomId[][];
     explanation: string;
   };
   numbering: {

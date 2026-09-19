@@ -30,11 +30,27 @@ export function Studio() {
       setReady(true);
       track(had ? 'return_session' : 'studio_opened', {});
       if (had) setTimeout(() => bus.emit('fit', 'instant'), 300);
+      // Shared problem set link (#set=…): save it locally and open practice.
+      if (location.hash.startsWith('#set=')) {
+        const { decodeSet, saveSet, loadProgress } = await import('@/lib/practice');
+        const set = decodeSet(location.hash.slice(5));
+        history.replaceState(null, '', location.pathname + location.search);
+        if (set) {
+          await loadProgress();
+          saveSet(set.title, set.items);
+          useStudio.setState({ panel: 'practice', landing: false });
+          useStudio.getState().notify({ kind: 'success', text: `Problem set “${set.title}” added (${set.items.length} items). Open “Problem sets” to start.` }, 7000);
+        }
+      }
     })();
     // Expose state for automated checks (read state, not screens).
     (window as unknown as { __orbital: unknown; __orbitalBus: unknown }).__orbital = useStudio;
     (window as unknown as { __orbitalBus: unknown }).__orbitalBus = bus;
-    (window as unknown as { __orbitalActions: unknown }).__orbitalActions = { resolveQuery, loadStructure };
+    (window as unknown as { __orbitalActions: unknown }).__orbitalActions = {
+      resolveQuery,
+      loadStructure,
+      practice: () => import('@/lib/practice'),
+    };
   }, []);
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

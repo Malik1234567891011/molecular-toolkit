@@ -4,6 +4,7 @@ import type { naming } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
 import { subColor } from '@/lib/colors';
 import { track } from '@/lib/analytics';
+import { usePracticeHidesName } from '@/lib/practice';
 import { ProvenanceBadge, PROVENANCE } from './ProvenanceBadge';
 import { I } from '../ui/icons';
 
@@ -96,7 +97,15 @@ export function NameBar() {
   const verification = useStudio((s) => s.verification);
   const doc = useStudio((s) => s.doc);
   const [open, setOpen] = useState(false);
+  const hidden = usePracticeHidesName();
   if (!doc.atoms.length) return <span className="text-sm text-text-3">No molecule yet</span>;
+  if (hidden) {
+    return (
+      <span className="flex items-center gap-2 text-[14px] text-text-2" data-testid="name-hidden">
+        <I.Target size={15} className="text-accent-strong" /> Name hidden while you practise
+      </span>
+    );
+  }
   const n = analysis?.naming;
   const errors = analysis?.validation.filter((v) => v.severity === 'error') ?? [];
   if (errors.length) {

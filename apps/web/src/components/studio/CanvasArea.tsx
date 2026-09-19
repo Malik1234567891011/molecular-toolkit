@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStudio, studio, type Mode3D, type RenderStyle } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { cleanLayout, freshGeometry } from '@/lib/pipeline';
+import { usePracticeHidesName } from '@/lib/practice';
 import { I } from '../ui/icons';
 
 const KitCanvas = dynamic(() => import('../three/KitCanvas'), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-text-3">Loading 3D…</div> });
@@ -32,7 +33,7 @@ function Toolbar3D() {
     { v: 'stereo', label: 'Stereo' },
   ];
   return (
-    <div className="glass pointer-events-auto flex flex-wrap items-center gap-0.5 rounded-2xl p-1" role="toolbar" aria-label="3D tools">
+    <div className="glass pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl p-1" role="toolbar" aria-label="3D tools">
       <ToolButton active={mode === 'build'} onClick={() => setMode('build')} title="Build: drag from a hydrogen port to add atoms">
         <I.Plus size={15} /> <span className="hidden sm:inline">Build</span>
       </ToolButton>
@@ -85,6 +86,7 @@ function StatusStrip() {
   const doc = useStudio((s) => s.doc);
   const mode = useStudio((s) => s.mode3d);
   const view = useStudio((s) => s.view);
+  const hidden = usePracticeHidesName();
   if (!doc.atoms.length) return null;
   const errors = a?.validation.filter((v) => v.severity === 'error') ?? [];
   const warns = a?.validation.filter((v) => v.severity === 'warning') ?? [];
@@ -106,7 +108,7 @@ function StatusStrip() {
         <span className="flex items-center gap-1 text-good"><I.Check size={13} /> valid</span>
       )}
       <span className="hidden md:inline">{hint}</span>
-      {a?.naming?.ok && (
+      {a?.naming?.ok && !hidden && (
         <button onClick={() => useStudio.setState({ panel: 'explain', explainStep: 0 })} className="flex items-center gap-1 font-medium text-accent-strong hover:underline" data-testid="explain-trigger">
           <I.Lightbulb size={13} /> Explain name
         </button>
@@ -137,7 +139,7 @@ export function CanvasArea() {
   return (
     <div ref={box} className="canvas-bg relative flex min-h-0 min-w-0 flex-1" data-testid="canvas-area">
       {(view === '2d' || view === 'split') && (
-        <div className="relative h-full" style={{ width: view === 'split' ? `${split * 100}%` : '100%' }}>
+        <div className="relative h-full min-w-0 shrink-0 overflow-hidden" style={{ width: view === 'split' ? `${split * 100}%` : '100%' }}>
           <Canvas2D />
           <div className="pointer-events-none absolute bottom-3 left-3 flex">
             <Toolbar2D />
@@ -160,10 +162,10 @@ export function CanvasArea() {
         />
       )}
       {(view === '3d' || view === 'split') && (
-        <div className="relative h-full flex-1">
+        <div className="relative h-full min-w-0 flex-1 overflow-hidden">
           <KitCanvas />
           {view === 'split' && <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-panel px-1.5 py-0.5 text-[11px] text-text-3">3D</div>}
-          <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2">
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-center">
             <Toolbar3D />
           </div>
         </div>

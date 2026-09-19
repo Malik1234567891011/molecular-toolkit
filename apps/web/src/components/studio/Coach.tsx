@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useStudio } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { track } from '@/lib/analytics';
+import { usePractice } from '@/lib/practice';
 import { ProvenanceBadge } from '../naming/ProvenanceBadge';
 import { I } from '../ui/icons';
 
@@ -16,16 +17,18 @@ export function Coach() {
   const view = useStudio((s) => s.view);
   const verification = useStudio((s) => s.verification);
   const tourSeen = useStudio((s) => s.settings.tourSeen);
+  const practising = usePractice((s) => !!s.problem);
   const [stage, setStage] = useState<'idle' | 'hint' | 'success' | 'done'>('idle');
   useEffect(() => {
-    if (tourSeen) return;
+    // Coaching would give answers away (and distract) during a practice problem.
+    if (tourSeen || practising) return;
     if (stage === 'idle' && doc.atoms.length === 1 && view !== '2d') setStage('hint');
     if (stage === 'hint' && doc.atoms.length >= 2) {
       setStage('success');
       track('first_molecule_completed', { via: 'build' });
     }
-  }, [doc, stage, view, tourSeen]);
-  if (tourSeen || stage === 'idle' || stage === 'done') return null;
+  }, [doc, stage, view, tourSeen, practising]);
+  if (tourSeen || practising || stage === 'idle' || stage === 'done') return null;
   if (stage === 'hint') {
     return (
       <div className="pointer-events-none absolute left-1/2 top-16 z-20 -translate-x-1/2">

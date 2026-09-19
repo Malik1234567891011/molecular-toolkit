@@ -5,7 +5,7 @@
  * so editing any view (rotate, swap two groups, flip the ring) updates all of them and the 3D model.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { analyzeChair, chairFlipFrames, chairRings, isRotatable, MolView, v3, type AtomId, type BondId, type MoleculeDocument, type StereoNeighbour, type Vec3 } from '@orbital/chem';
+import { analyzeChair, chairFlipFrames, chairRings, isRotatable, MolView, perceiveStereo, v3, type AtomId, type BondId, type MoleculeDocument, type StereoNeighbour, type Vec3 } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
 import { instantGeometry, bus } from '@/lib/events';
 import { track } from '@/lib/analytics';
@@ -477,9 +477,9 @@ function WedgeDashSvg({ doc, wd, theme, specified, onSwap }: { doc: MoleculeDocu
   );
 }
 
-function FischerBody({ doc, f, ink, theme, swapFrom, onLigand, active, turned }: {
+function FischerBody({ doc, f, ink, theme, swapFrom, onLigand, active, turned, hideDescriptors }: {
   doc: MoleculeDocument; f: ReturnType<typeof fischerData>; ink: string; theme: 'dark' | 'light';
-  swapFrom: { atomId: AtomId; lig: StereoNeighbour } | null; onLigand: (c: FischerCross, l: StereoNeighbour) => void; active?: AtomId; turned: boolean;
+  swapFrom: { atomId: AtomId; lig: StereoNeighbour } | null; onLigand: (c: FischerCross, l: StereoNeighbour) => void; active?: AtomId; turned: boolean; hideDescriptors?: boolean;
 }) {
   const x0 = 110;
   const y0 = 30;
@@ -512,7 +512,7 @@ function FischerBody({ doc, f, ink, theme, swapFrom, onLigand, active, turned }:
             {cr.atomId === active && <circle cx={x0} cy={y} r={5} fill="var(--accent)" />}
             {side(cr.left, x0 - 46, 'end')}
             {side(cr.right, x0 + 46, 'start')}
-            {cr.stereo && (
+            {cr.stereo && !hideDescriptors && (
               <g transform={`translate(${x0 + 12} ${y - 12})`}>
                 <text x={0} y={0} transform={upright} textAnchor="middle" dominantBaseline="central" fontSize={10} fontStyle="italic" fontWeight={600} fill={cr.specified ? 'var(--accent-strong)' : 'var(--amber)'}>{cr.specified ? cr.descriptor : '?'}</text>
               </g>
@@ -741,4 +741,18 @@ function mapChair(z: number[], up: number[], locantOf: Record<string, string> | 
   }
   if (!best) return null;
   return { map: best, locants: best.map((r) => locantOf?.[ring[r]]) };
+}
+
+/** Read-only Fischer projection of any document (practice: "which projection is this?"). */
+export function FischerView({ doc, trace }: { doc: MoleculeDocument; trace: import('@orbital/chem').naming.NamingTrace }) {
+  const theme = useResolvedTheme();
+  const centres = useMemo(() => perceiveStereo(doc).centres.filter((c) => !c.needsHigherRules), [doc]);
+  const f = useMemo(() => fischerData(doc, trace, centres), [doc, trace, centres]);
+  if (!f.ok) return <p className="text-[12px] text-text-2">{f.reason}</p>;
+  const ink = theme === 'dark' ? '#dfe3ea' : '#1b1e24';
+  return (
+    <svg viewBox={`0 0 220 ${24 + (f.crosses.length + 1) * 56}`} className="w-full" role="img" aria-label="Fischer projection">
+      <FischerBody doc={doc} f={f} ink={ink} theme={theme} swapFrom={null} onLigand={() => undefined} turned={false} hideDescriptors />
+    </svg>
+  );
 }
