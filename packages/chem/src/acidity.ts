@@ -115,6 +115,8 @@ export function acidSites(doc: Pick<MoleculeDocument, 'atoms' | 'bonds'>): AcidS
         add(i, 43, 'aromatic C–H', 'The aryl anion’s lone pair is in an sp² orbital, not delocalized in the ring.');
       } else if (nb.some((c) => aromatic(c) && el(c) === 'C')) {
         add(i, 41, 'benzylic C–H', 'The benzylic anion delocalizes into the ring, but carbon holds charge poorly.');
+      } else if (v.nbrs[i].some((j) => order(i, j) === 2 && el(j) === 'O')) {
+        add(i, 40, 'aldehyde (formyl) C–H', 'Not acidic: the acyl anion’s lone pair sits in an sp² orbital in the molecular plane, at right angles to the C=O π bond, so the carbonyl cannot spread the charge. In aldehydes the acidic hydrogens are the α-H’s, when there are any.');
       } else if (v.nbrs[i].some((j) => order(i, j) === 2)) {
         add(i, 44, 'vinylic C–H', 'An sp² carbanion, not delocalized.');
       } else if (nb.some((c) => v.nbrs[c].some((x) => x !== i && order(c, x) === 2 && el(x) === 'C'))) {

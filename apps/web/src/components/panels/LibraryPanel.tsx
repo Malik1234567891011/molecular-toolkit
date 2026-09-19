@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { applyCommand, parseSmiles, writeSmiles, type MoleculeDocument } from '@orbital/chem';
+import { applyCommand, parseSmiles, prettyFormula, writeSmiles, type MoleculeDocument } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
 import { loadStructure } from '@/lib/actions';
 import { recents, type RecentEntry } from '@/lib/persist';
@@ -94,6 +94,8 @@ interface Side {
   analysis: Analysis;
   svg: string;
   key: string;
+  /** Has stereocentres yet is its own mirror image (an internal mirror plane). */
+  meso: boolean;
 }
 
 async function describe(smiles: string): Promise<Side> {
@@ -102,7 +104,14 @@ async function describe(smiles: string): Promise<Side> {
     call<Analysis>('analyze', { doc, profileId: studio().settings.profileId }),
     call<string>('svg', { doc, width: 200, height: 150, dark: document.documentElement.dataset.resolvedTheme !== 'light' }),
   ]);
-  return { smiles, doc, analysis, svg, key: analysis.identifiers?.inchiKey ?? '' };
+  const key = analysis.identifiers?.inchiKey ?? '';
+  const specified = analysis.stereo.centres.filter((c) => c.specified).length;
+  let meso = false;
+  if (specified >= 2 && key) {
+    const mirror = applyCommand(doc, { type: 'mirror' }).doc;
+    meso = (await call<string | null>('inchikey', { smiles: writeSmiles(mirror).smiles })) === key;
+  }
+  return { smiles, doc, analysis, svg, key, meso };
 }
 
 async function relationship(a: Side, b: Side): Promise<{ label: string; detail: string }> {
@@ -111,7 +120,11 @@ async function relationship(a: Side, b: Side): Promise<{ label: string; detail: 
     const mirror = applyCommand(a.doc, { type: 'mirror' }).doc;
     const mk = await call<string | null>('inchikey', { smiles: writeSmiles(mirror).smiles });
     if (mk && mk === b.key) return { label: 'Enantiomers', detail: 'Non-superimposable mirror images: every stereocentre is inverted.' };
-    return { label: 'Diastereomers', detail: 'Same connectivity, different arrangement in space, and not mirror images.' };
+    const meso = a.meso ? 'The first' : b.meso ? 'The second' : null;
+    return {
+      label: 'Diastereomers',
+      detail: `Same connectivity, different arrangement in space, and not mirror images.${meso ? ` ${meso} is meso: it has an internal mirror plane, so despite its stereocentres it is achiral — its own mirror image.` : ''}`,
+    };
   }
   if (a.analysis.formula.formula === b.analysis.formula.formula) return { label: 'Constitutional isomers', detail: 'Same formula, atoms connected differently.' };
   return { label: 'Different compounds', detail: 'Different molecular formulas.' };
@@ -124,7 +137,7 @@ function Compare() {
   const [result, setResult] = useState<{ a: Side; b: Side; rel: { label: string; detail: string } } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const run = async () => {
+  const run = async (l = left, r = right) => {
     setErr(null);
     setBusy(true);
     try {
@@ -139,7 +152,7 @@ function Compare() {
           return r.candidates[0].canonicalSmiles;
         }
       };
-      const [sa, sb] = await Promise.all([resolve(left.trim()), resolve(right.trim())]);
+      const [sa, sb] = await Promise.all([resolve(l.trim()), resolve(r.trim())]);
       const [a, b] = await Promise.all([describe(sa), describe(sb)]);
       setResult({ a, b, rel: await relationship(a, b) });
     } catch (e) {
@@ -150,11 +163,11 @@ function Compare() {
   };
   const rows: Array<[string, (s: Side) => string]> = [
     ['Name', (s) => s.analysis.naming?.name ?? '—'],
-    ['Formula', (s) => s.analysis.formula.formula],
+    ['Formula', (s) => prettyFormula(s.analysis.formula.counts, s.analysis.formula.charge)],
     ['Molar mass', (s) => `${s.analysis.identifiers?.descriptors?.molarMass.toFixed(2) ?? '—'} g/mol`],
     ['logP', (s) => s.analysis.identifiers?.descriptors?.logP.toFixed(2) ?? '—'],
     ['TPSA', (s) => `${s.analysis.identifiers?.descriptors?.tpsa.toFixed(1) ?? '—'} Å²`],
-    ['Stereo', (s) => [...s.analysis.stereo.centres.map((c) => c.descriptor ?? '?'), ...s.analysis.stereo.bonds.map((x) => x.descriptor ?? '?')].join(', ') || 'none'],
+    ['Stereo', (s) => ([...s.analysis.stereo.centres.map((c) => c.descriptor ?? '?'), ...s.analysis.stereo.bonds.map((x) => x.descriptor ?? '?')].join(', ') || 'none') + (s.meso ? ' (meso)' : '')],
   ];
   return (
     <div className="space-y-3">
@@ -205,7 +218,7 @@ function Compare() {
           ['CCO', 'COC'],
           ['C[C@@H](Br)[C@@H](C)Br', 'C[C@@H](Br)[C@H](C)Br'],
         ].map(([a, b]) => (
-          <button key={a + b} onClick={() => { setLeft(a); setRight(b); }} className="mono rounded-full border border-border px-2 py-0.5 hover:border-accent">{a} vs {b}</button>
+          <button key={a + b} onClick={() => { setLeft(a); setRight(b); void run(a, b); }} className="mono rounded-full border border-border px-2 py-0.5 hover:border-accent">{a} vs {b}</button>
         ))}
       </div>
     </div>
