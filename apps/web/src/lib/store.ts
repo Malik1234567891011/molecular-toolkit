@@ -64,6 +64,8 @@ export interface StudioState {
   landing: boolean;
   paletteOpen: boolean;
   mobileSheet: 'peek' | 'half' | 'full';
+  /** Photo placed under the 2D editor for tracing (world units; never uploaded). */
+  underlay: { url: string; x: number; y: number; w: number; h: number; opacity: number } | null;
   /** Rotatable bond being manipulated in conformer mode. */
   activeBond: BondId | null;
   /** Rigid MMFF scan for the active bond (energy curve). */
@@ -158,6 +160,7 @@ const createStudio = () => create<StudioState>((set, get) => ({
   paletteOpen: false,
   mobileSheet: 'peek',
   activeBond: null,
+  underlay: null,
   scan: null,
   liveEnergy: null,
 

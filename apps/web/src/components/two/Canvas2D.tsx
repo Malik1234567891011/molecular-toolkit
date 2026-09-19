@@ -47,6 +47,7 @@ export default function Canvas2D() {
   const hoverAtom = useStudio((s) => s.hoverAtom);
   const hoverBond = useStudio((s) => s.hoverBond);
   const highlights = useStudio((s) => s.highlights);
+  const underlay = useStudio((s) => s.underlay);
   const analysis = useStudio((s) => s.analysis);
   const invalid = useStudio((s) => s.invalid);
   const showLabels = useStudio((s) => s.settings.showLabels);
@@ -629,6 +630,10 @@ export default function Canvas2D() {
           </pattern>
         </defs>
         <rect width={size.w} height={size.h} fill="url(#grid2d)" />
+        {underlay && (() => {
+          const tl = toScreen([underlay.x, underlay.y + underlay.h]);
+          return <image href={underlay.url} x={tl[0]} y={tl[1]} width={underlay.w * view.scale} height={underlay.h * view.scale} opacity={underlay.opacity} preserveAspectRatio="none" pointerEvents="none" data-testid="underlay" />;
+        })()}
         {bondEls}
         {preview}
         {ghost}

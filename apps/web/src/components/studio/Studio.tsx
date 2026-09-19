@@ -18,6 +18,7 @@ import { Shortcuts } from './Shortcuts';
 import { Coach } from './Coach';
 import { ShareDialog } from './ShareDialog';
 import { CommandPalette } from './CommandPalette';
+import { ScanDialog } from './ScanDialog';
 
 export function Studio() {
   useApplyTheme();
@@ -70,6 +71,8 @@ export function Studio() {
       capture: () => import('@/lib/capture'),
       export3d: () => import('@/lib/export3d'),
       share: () => import('@/lib/share'),
+      worker: () => import('@/lib/worker'),
+      chem: () => import('@orbital/chem'),
     };
   }, []);
   return (
@@ -88,6 +91,7 @@ export function Studio() {
       <Shortcuts />
       <ShareDialog />
       <CommandPalette />
+      <ScanDialog />
     </div>
   );
 }

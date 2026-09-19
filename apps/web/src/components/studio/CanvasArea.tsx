@@ -66,8 +66,18 @@ function Toolbar3D() {
 }
 
 function Toolbar2D() {
+  const underlay = useStudio((s) => s.underlay);
   return (
     <div className="glass pointer-events-auto flex items-center gap-0.5 rounded-2xl p-1" role="toolbar" aria-label="2D tools">
+      {underlay && (
+        <div className="flex items-center gap-1.5 border-r border-border pl-2 pr-2 text-[12px] text-text-2" data-testid="underlay-controls">
+          <I.Camera size={14} />
+          <input type="range" min={0.1} max={0.9} step={0.05} value={underlay.opacity} onChange={(e) => useStudio.setState({ underlay: { ...underlay, opacity: Number(e.target.value) } })} className="w-20 accent-[var(--accent)]" aria-label="Photo opacity" />
+          <button onClick={() => useStudio.setState({ underlay: null })} className="rounded-md px-1 hover:text-text" title="Remove the photo">
+            <I.X size={13} />
+          </button>
+        </div>
+      )}
       <ToolButton onClick={() => void cleanLayout()} title="Clean up the 2D layout">
         <I.Wand size={15} /> Clean up
       </ToolButton>

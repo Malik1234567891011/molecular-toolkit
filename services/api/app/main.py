@@ -62,9 +62,12 @@ async def health() -> dict[str, Any]:
 
 def _ocsr_available() -> dict[str, Any]:
     try:
-        from . import ocsr
+        from . import ocsr, tutor
 
-        return ocsr.status()
+        st = ocsr.status()
+        if not st["available"] and tutor.available():
+            return {"available": True, "engine": "vision", "reason": "MolScribe not installed; using the multimodal model (always verified by the student)."}
+        return st
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "reason": str(exc)}
 
