@@ -352,7 +352,12 @@ async def _chat_stream(body: ChatIn) -> AsyncIterator[str]:
                 yield _sse({"type": "action", **action})
             results.append({"type": "tool_result", "tool_use_id": tu.id, "content": text})
         messages.append({"role": "user", "content": results})
-        yield _sse({"type": "text", "delta": ""})
+        # Keep prose from consecutive turns apart ("…the data.The engine…").
+        if full_text and not full_text.endswith(("\n", " ")):
+            full_text += "\n\n"
+            yield _sse({"type": "text", "delta": "\n\n"})
+        else:
+            yield _sse({"type": "text", "delta": ""})
     checks = await _verify_names(full_text, snapshot)
     if checks:
         yield _sse({"type": "names", "checks": checks})

@@ -184,7 +184,11 @@ const createStudio = () => create<StudioState>((set, get) => ({
     const selection = opts.select === 'created' ? { atoms: res.created.atoms.slice(-1), bonds: [] } : opts.select === 'none' ? { atoms: [], bonds: [] } : get().selection;
     const validAtoms = new Set(doc.atoms.map((a) => a.id));
     const validBonds = new Set(doc.bonds.map((b) => b.id));
+    // Highlights that explained the previous structure are stale after an identity change;
+    // open panels (Explain, Projections) re-derive theirs from the new document.
+    const keepHighlight = (k: string) => !res.identityChanged || !/^(tutor:|explain:|practice:hint)/.test(k);
     set((s) => ({
+      highlights: Object.fromEntries(Object.entries(s.highlights).filter(([k]) => keepHighlight(k))),
       doc,
       version: res.identityChanged ? s.version + 1 : s.version,
       past: [...s.past.slice(-199), entry],

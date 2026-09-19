@@ -50,6 +50,7 @@ export function Studio() {
       resolveQuery,
       loadStructure,
       practice: () => import('@/lib/practice'),
+      tutor: () => import('@/lib/tutor'),
     };
   }, []);
   return (

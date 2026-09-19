@@ -1291,9 +1291,11 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     reasons.add(k);
     return true;
   }).slice(0, 6);
+  const chosenLabel = c.kind === 'chain' ? `${c.atoms.length}-carbon chain` : c.ring!.describe;
+  const rival = topAlts[0] ? `${topAlts[0].label === chosenLabel || topAlts[0].label === c.label ? 'Another' : 'The'} ${topAlts[0].label} was rejected because ${topAlts[0].rejectedBecause}` : '';
   const parentText = c.kind === 'chain'
-    ? `The parent is the ${c.atoms.length}-carbon chain${pk ? ' that carries the principal group' : ''}${topAlts.length ? `. The ${topAlts[0].label} was rejected because ${topAlts[0].rejectedBecause}` : ''}.`
-    : `The parent is the ${c.ring!.describe}${topAlts.length ? `. The ${topAlts[0].label} was rejected because ${topAlts[0].rejectedBecause}` : ''}.`;
+    ? `The parent is the ${chosenLabel}${pk ? ' that carries the principal group' : ''}${rival ? `. ${rival}` : ''}.`
+    : `The parent is the ${chosenLabel}${rival ? `. ${rival}` : ''}.`;
 
   let alternative: NumberingAlternative | undefined;
   let reason = c.numberings.length > 1 ? 'Every direction gives the same locants.' : 'Only one numbering is possible.';

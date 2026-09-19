@@ -26,7 +26,7 @@ const STEPS = [
   { title: 'Assemble the name', short: 'Assemble' },
 ];
 
-type Focus = { kind: 'alt'; i: number } | { kind: 'other' } | { kind: 'sub'; i: number } | { kind: 'stereo'; i: number } | { kind: 'group'; i: number } | null;
+export type Focus = { kind: 'alt'; i: number } | { kind: 'other' } | { kind: 'sub'; i: number } | { kind: 'stereo'; i: number } | { kind: 'group'; i: number } | null;
 
 function bondsWithin(doc: MoleculeDocument, atoms: AtomId[]): BondId[] {
   const s = new Set(atoms);
@@ -37,7 +37,7 @@ function bondBetween(doc: MoleculeDocument, a: AtomId, b: AtomId): BondId | unde
   return doc.bonds.find((x) => (x.a1 === a && x.a2 === b) || (x.a1 === b && x.a2 === a))?.id;
 }
 
-function setExplainHighlights(hs: Highlight[]) {
+export function setExplainHighlights(hs: Highlight[]) {
   useStudio.setState((s) => {
     const next: Record<string, Highlight> = {};
     for (const [k, v] of Object.entries(s.highlights)) if (!k.startsWith('explain:')) next[k] = v;
@@ -222,7 +222,7 @@ function Empty({ text }: { text: string }) {
 // ---------------------------------------------------------------------------------------------
 // Highlights for each step
 
-function highlightsFor(t: Trace, doc: MoleculeDocument, step: number, focus: Focus, reveal: number, analysis: ReturnType<typeof useStudio.getState>['analysis']): Highlight[] {
+export function highlightsFor(t: Trace, doc: MoleculeDocument, step: number, focus: Focus, reveal: number, analysis: ReturnType<typeof useStudio.getState>['analysis']): Highlight[] {
   const out: Highlight[] = [];
   const parentBonds = bondsWithin(doc, t.parent.atomIds);
   const parent = (tone: Highlight['tone'], labels?: Record<AtomId, string>): Highlight => ({ id: 'explain:parent', atoms: t.parent.atomIds, bonds: parentBonds, tone, labels });
