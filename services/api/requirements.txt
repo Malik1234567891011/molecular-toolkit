@@ -1,0 +1,12 @@
+# Chemistry API (Python 3.12). Install into services/api/.venv — see scripts/setup.sh.
+rdkit==2025.9.3
+fastapi>=0.141
+uvicorn[standard]>=0.53
+httpx>=0.28
+pydantic>=2.13
+python-multipart>=0.0.32
+anthropic>=1.7
+pillow>=12
+numpy>=2.5
+scipy>=1.18
+pyscf>=2.14

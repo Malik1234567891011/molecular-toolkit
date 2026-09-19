@@ -27,6 +27,18 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
 
+  // The post-lookup note is informational: Escape dismisses it, and it steps aside after a while.
+  useEffect(() => {
+    if (!search.note) return;
+    const t = setTimeout(() => useSearch.getState().set({ note: null }), 15000);
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') useSearch.getState().set({ note: null }); };
+    window.addEventListener('keydown', key);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('keydown', key);
+    };
+  }, [search.note]);
+
   const onChange = (v: string) => {
     setValue(v);
     setActive(-1);

@@ -9,10 +9,12 @@
     "services/rooms"
   ],
   "scripts": {
+    "setup": "bash scripts/setup.sh",
     "dev": "node scripts/dev.mjs",
     "test": "npm run test -w @orbital/chem",
     "typecheck": "npm run typecheck -w @orbital/chem && npm run typecheck -w @orbital/web",
-    "corpus": "npm run corpus -w @orbital/chem"
+    "corpus": "npm run corpus -w @orbital/chem",
+    "e2e": "npm run e2e -w @orbital/web"
   },
   "engines": {
     "node": ">=22"
