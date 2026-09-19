@@ -51,14 +51,16 @@ def _require(request: Request) -> str:
     return uid
 
 
-def _start_session(response: Response, uid: str) -> None:
+def _start_session(request: Request, response: Response, uid: str) -> None:
     token = secrets.token_urlsafe(32)
     store.session_create(token, uid)
-    response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90, path="/")
+    # Secure whenever the site is served over https (hosted: Vercel's forwarded proto).
+    secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+    response.set_cookie(COOKIE, token, httponly=True, secure=secure, samesite="lax", max_age=60 * 60 * 24 * 90, path="/")
 
 
 @router.post("/v1/auth/register")
-def register(body: Creds, response: Response) -> dict[str, Any]:
+def register(body: Creds, request: Request, response: Response) -> dict[str, Any]:
     email = body.email.strip().lower()
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
         raise HTTPException(400, "Enter a valid email address.")
@@ -71,17 +73,17 @@ def register(body: Creds, response: Response) -> dict[str, Any]:
         raise HTTPException(400, "Use an email address made of letters, digits and . _ + - @.") from None
     if not created:
         raise HTTPException(409, "An account with this email already exists.")
-    _start_session(response, uid)
+    _start_session(request, response, uid)
     return {"id": uid, "email": email}
 
 
 @router.post("/v1/auth/login")
-def login(body: Creds, response: Response) -> dict[str, Any]:
+def login(body: Creds, request: Request, response: Response) -> dict[str, Any]:
     email = body.email.strip().lower()
     found = store.user_by_email(email)
     if not found or not _check(body.password, found[1]):
         raise HTTPException(401, "Email or password is incorrect.")
-    _start_session(response, found[0])
+    _start_session(request, response, found[0])
     return {"id": found[0], "email": email}
 
 
