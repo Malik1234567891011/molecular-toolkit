@@ -179,6 +179,8 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
         hMesh.setMatrixAt(i, tmpM);
         tmpC.set(atomColor('H', theme, cvd));
         if (parentSel) tmpC.lerp(new THREE.Color(HALO_TONES.accent), 0.55);
+        const hl = highlightColorOf.get(at.key);
+        if (hl) tmpC.lerp(new THREE.Color(hl), 0.45);
         hMesh.setColorAt(i, tmpC);
       });
       hMesh.count = hydrogens.length;
@@ -256,6 +258,11 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
         else if (highlightColorOf.has(at.atomId)) put(at.key, base, highlightColorOf.get(at.atomId)!);
         if (invalid?.atomId === at.atomId) put(at.key, base * 1.12, HALO_TONES.danger);
       }
+      // Hydrogens are highlighted by their conformer key (e.g. an acidic proton "a3.h1").
+      for (const at of hydrogens) {
+        const c = highlightColorOf.get(at.key);
+        if (c) put(at.key, style === 'spacefill' ? at.radius * 1.04 : Math.max(at.radius * 1.7, 0.36), c);
+      }
       haloMesh.count = n;
       haloMesh.instanceMatrix.needsUpdate = true;
       if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true;
@@ -266,7 +273,7 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
   const atomCap = capacity(heavy.length);
   const hCap = capacity(hydrogens.length);
   const bondCap = capacity(bondInstances.length);
-  const haloCap = capacity(heavy.length * 2 + 4);
+  const haloCap = capacity(heavy.length * 2 + hydrogens.length + 4);
 
   const pickAtom = (list: RAtom[]) => (e: ThreeEvent<PointerEvent>) => {
     if (e.instanceId === undefined || ghost) return;

@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import {
-  CipRanker, MolView, angleDeg, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
+  CipRanker, MolView, acidSites, angleDeg, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
   type AtomId, type BondId, type StereoNeighbour, type Vec3,
 } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
@@ -70,6 +70,63 @@ function InvalidCard() {
 
 // ---------------------------------------------------------------------------------------------
 
+/** Most acidic proton: textbook pKa classes with the conjugate-base reason (spec §14). */
+function AcidityCard() {
+  const doc = useStudio((s) => s.doc);
+  const setHighlight = useStudio((s) => s.setHighlight);
+  const [more, setMore] = useState(false);
+  const sites = useMemo(() => {
+    // One entry per kind: the list reads as a ranking, not an atom dump.
+    const seen = new Set<string>();
+    return acidSites(doc).filter((x) => (seen.has(x.kind) ? false : (seen.add(x.kind), true)));
+  }, [doc]);
+  if (!sites.length) return null;
+  const hl = (atomId: AtomId) => {
+    const hs = Object.keys(coords()).filter((k) => k.startsWith(`${atomId}.h`));
+    setHighlight('acid', { id: 'acid', atoms: [atomId, ...hs], bonds: [], tone: 'accent', label: 'acidic H' });
+  };
+  const top = sites[0];
+  const atomsOf = (kind: string) => acidSites(doc).filter((x) => x.kind === kind).map((x) => x.atomId);
+  return (
+    <Section title="Most acidic proton" right={<span className="text-[11px] text-text-3" title="Approximate aqueous pKa from textbook tables — a teaching estimate, not a prediction">≈ pKa</span>}>
+      <button
+        className="w-full rounded-xl border border-border bg-panel-raised px-3 py-2 text-left hover:border-accent"
+        onMouseEnter={() => hl(top.atomId)}
+        onMouseLeave={() => setHighlight('acid', null)}
+        onFocus={() => hl(top.atomId)}
+        onBlur={() => setHighlight('acid', null)}
+        onClick={() => studio().select(atomsOf(top.kind))}
+        data-testid="acid-top"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[13.5px] font-semibold">{/(^|[\s-])H\b|–H$|^hydrogen/.test(top.kind) ? top.kind.replace(/^[a-z]/, (c) => c.toUpperCase()) : `${top.element}–H of the ${top.kind}`}</span>
+          <span className="mono text-[15px] font-semibold text-accent">{top.pKa < 0 ? '−' + Math.abs(top.pKa) : top.pKa}</span>
+        </div>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-text-2">{top.reason}</p>
+      </button>
+      {sites.length > 1 && (
+        <>
+          <button className="mt-1.5 text-[11.5px] text-text-3 hover:text-text" onClick={() => setMore((x) => !x)} aria-expanded={more}>
+            {more ? 'Hide ranking' : `Compare ${sites.length - 1} other H${sites.length > 2 ? ' types' : ' type'}`}
+          </button>
+          {more && (
+            <ol className="mt-1 space-y-0.5">
+              {sites.slice(1).map((x) => (
+                <li key={x.kind}>
+                  <button className="flex w-full items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left text-[12.5px] hover:bg-panel-raised" onMouseEnter={() => hl(x.atomId)} onMouseLeave={() => setHighlight('acid', null)} onClick={() => studio().select(atomsOf(x.kind))} title={x.reason}>
+                    <span className="text-text-2">{x.kind}</span>
+                    <span className="mono">{x.pKa}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 function FactsCard() {
   const a = useStudio((s) => s.analysis);
   const doc = useStudio((s) => s.doc);
@@ -136,6 +193,7 @@ function FactsCard() {
           </div>
         </Section>
       )}
+      <AcidityCard />
       <Section title="Validation">
         {a.validation.filter((v) => v.code !== 'unspecified-stereo').length === 0 && <div className="flex items-center gap-1.5 text-[13px] text-good"><I.Check size={15} /> Valid structure</div>}
         <ul className="space-y-2">
