@@ -303,7 +303,8 @@ ALLOWED_EVENTS = {
     "input_name_ambiguous", "input_name_failed", "structure_name_verified", "structure_name_unsupported", "naming_step_opened",
     "why_not_numbering_opened", "projection_opened", "ar_opened", "practice_started", "hint_level_used", "answer_corrected",
     "scan_started", "scan_correction_required", "scan_accepted", "molecule_saved", "molecule_shared", "molecule_exported",
-    "study_room_joined", "return_session", "explanation_interaction", "answer_checked",
+    "study_room_joined", "return_session", "explanation_interaction", "answer_checked", "tour_started", "tour_completed",
+    "tour_skipped",
 }
 
 
