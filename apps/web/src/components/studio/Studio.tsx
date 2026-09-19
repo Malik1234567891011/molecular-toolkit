@@ -28,6 +28,20 @@ export function Studio() {
   const [ready, setReady] = useState(false);
   useEffect(() => watchVerifiedChime(), []);
   useEffect(() => {
+    // Offline support (spec §17). Dev builds skip it so hot reload never fights a cache.
+    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return;
+    void navigator.serviceWorker
+      .register('/sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => {
+        // Hand over what this page already loaded (scripts, fonts, the chemistry worker) for offline use.
+        const send = () => reg.active?.postMessage({ type: 'cache-urls', urls: performance.getEntriesByType('resource').map((e) => e.name) });
+        send();
+        setTimeout(send, 8000);
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
     warmUp();
     void (async () => {
       const had = await restore();
@@ -50,6 +64,14 @@ export function Studio() {
           useStudio.getState().notify({ kind: 'warning', text: 'That shared molecule could not be opened (the link may be wrong or offline).' });
         }
       }
+      // App shortcuts (manifest): ?panel=<panel> opens a panel, ?scan=1 opens the scanner.
+      const params = new URLSearchParams(location.search);
+      const panelParam = params.get('panel');
+      if (panelParam && ['practice', 'tutor', 'explain', 'projection', 'mechanism', 'resonance', 'orbitals', 'library', 'room'].includes(panelParam)) {
+        useStudio.setState({ panel: panelParam as never, landing: false });
+      }
+      if (params.get('scan') === '1') bus.emit('open:scan');
+      if (panelParam || params.get('scan')) history.replaceState(null, '', location.pathname);
       // Study room link (?room=<id>): join straight away.
       const roomId = new URLSearchParams(location.search).get('room');
       if (roomId && /^[\w-]{4,64}$/.test(roomId)) {

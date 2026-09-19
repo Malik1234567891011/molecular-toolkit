@@ -8,10 +8,9 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 export const metadata: Metadata = {
   title: 'Orbital — molecular studio',
   description: 'Build or find any molecule, see it in 3D, and move between structure and IUPAC name with every naming decision explained on the molecule.',
-  manifest: '/manifest.webmanifest',
   applicationName: 'Orbital',
   appleWebApp: { capable: true, title: 'Orbital', statusBarStyle: 'black-translucent' },
-  icons: { icon: '/icon.svg', apple: '/icon-192.png' },
+  icons: { icon: '/icon.svg', apple: '/apple-touch-icon.png' },
 };
 
 export const viewport: Viewport = {
