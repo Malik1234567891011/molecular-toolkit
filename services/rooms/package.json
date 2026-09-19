@@ -1,0 +1,16 @@
+{
+  "name": "@orbital/rooms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Study-room realtime relay (Yjs over WebSockets)",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "lib0": "^0.2.117",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
+  }
+}

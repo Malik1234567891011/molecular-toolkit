@@ -1,0 +1,20 @@
+{
+  "name": "orbital",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Orbital: a web-first molecular modelling studio and organic-chemistry naming tutor",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/rooms"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "npm run test -w @orbital/chem",
+    "typecheck": "npm run typecheck -w @orbital/chem && npm run typecheck -w @orbital/web",
+    "corpus": "npm run corpus -w @orbital/chem"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
