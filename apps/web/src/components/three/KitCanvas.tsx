@@ -92,6 +92,16 @@ function CameraRig() {
     const off = bus.on('fit', fit);
     return off;
   }, [camera, controls, size]);
+  // When the pane changes shape a lot (Split on/off, a phone rotating), refit so the molecule
+  // stays in frame; the viewing direction is kept.
+  const lastAspect = useRef(size.width / Math.max(1, size.height));
+  useEffect(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    if (Math.abs(Math.log(aspect / lastAspect.current)) < 0.18) return;
+    lastAspect.current = aspect;
+    const t = setTimeout(() => bus.emit('fit'), 120);
+    return () => clearTimeout(t);
+  }, [size.width, size.height]);
   // First fit once the controls exist (restored sessions, view switches).
   const fitted = useRef(false);
   useEffect(() => {

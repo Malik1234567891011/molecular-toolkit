@@ -14,6 +14,7 @@ import { loadStructure } from '@/lib/actions';
 import { atomColor } from '@/lib/colors';
 import { useResolvedTheme } from '@/lib/useTheme';
 import { I } from '../ui/icons';
+import { alignToInk, applyInk } from '@/lib/ink-align';
 
 interface SAtom { symbol: string; x: number; y: number; charge: number; confidence: number; deleted?: boolean }
 interface SBond { a: number; b: number; order: 1 | 2 | 3; stereo: 'none' | 'wedge' | 'hash' | 'wavy'; confidence: number; deleted?: boolean }
@@ -104,7 +105,11 @@ export function ScanDialog() {
       if (r.found === false || !r.atoms.length) {
         setErr(`No structure could be read${r.notes ? ` (${r.notes})` : ''}. Try a tighter crop, or trace it yourself.`);
       } else {
-        setRec({ engine: r.engine, notes: r.notes, warnings: r.warnings ?? [], readerName: r.readerName ?? null, image: r.image, atoms: r.atoms.map((a) => ({ symbol: a.symbol ?? 'C', x: a.x, y: a.y, charge: a.charge ?? 0, confidence: a.confidence ?? 0.5 })), bonds: r.bonds.map((b) => ({ ...b, order: (b.order ?? 1) as 1 | 2 | 3, stereo: b.stereo ?? 'none', confidence: b.confidence ?? 0.5 })) });
+        const atoms = r.atoms.map((a) => ({ symbol: a.symbol ?? 'C', x: a.x, y: a.y, charge: a.charge ?? 0, confidence: a.confidence ?? 0.5 }));
+        const bonds = r.bonds.map((b) => ({ ...b, order: (b.order ?? 1) as 1 | 2 | 3, stereo: b.stereo ?? 'none', confidence: b.confidence ?? 0.5 }));
+        // The reader places atoms roughly; snap the overlay onto the ink it describes.
+        const t = await alignToInk(image.url, atoms, bonds).catch(() => null);
+        setRec({ engine: r.engine, notes: r.notes, warnings: r.warnings ?? [], readerName: r.readerName ?? null, image: r.image, atoms: t ? applyInk(atoms, t) : atoms, bonds });
       }
     } catch (e) {
       setErr((e as Error).message);

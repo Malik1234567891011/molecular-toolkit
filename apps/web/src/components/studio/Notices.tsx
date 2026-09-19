@@ -6,7 +6,8 @@ export function Notices() {
   const notices = useStudio((s) => s.notices);
   const dismiss = useStudio((s) => s.dismiss);
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite">
+    // Beside the side panel (372 px) rather than over its footer buttons; above the dock on phones.
+    <div className="pointer-events-none fixed bottom-24 right-4 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2 md:bottom-20 md:right-[388px] md:w-[320px]" aria-live="polite">
       {notices.map((n) => (
         <div key={n.id} className="glass fade-up pointer-events-auto flex items-start gap-2 rounded-xl px-3 py-2 text-[13px]" role={n.kind === 'error' ? 'alert' : 'status'}>
           {n.kind === 'error' ? <I.Alert size={16} className="mt-0.5 shrink-0 text-danger" /> : n.kind === 'warning' ? <I.Alert size={16} className="mt-0.5 shrink-0 text-amber" /> : n.kind === 'success' ? <I.Check size={16} className="mt-0.5 shrink-0 text-good" /> : <I.Info size={16} className="mt-0.5 shrink-0 text-text-2" />}

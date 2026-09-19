@@ -25,6 +25,9 @@ function Toolbar3D() {
   const showH = useStudio((s) => s.settings.showHydrogens);
   const labels = useStudio((s) => s.settings.showLabels);
   const geometry = useStudio((s) => s.geometry);
+  // Half a canvas in Split view: icons only (titles keep the words), so the bar stays one line.
+  const compact = useStudio((s) => s.view === 'split');
+  const lbl = compact ? 'hidden' : 'hidden sm:inline';
   const setMode = (m: Mode3D) => useStudio.setState({ mode3d: m, measure: [], activeBond: m === 'conformer' ? studio().activeBond : null });
   const styles: Array<{ v: RenderStyle; label: string }> = [
     { v: 'kit', label: 'Model kit' },
@@ -36,13 +39,13 @@ function Toolbar3D() {
   return (
     <div className="glass pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl p-1" role="toolbar" aria-label="3D tools">
       <ToolButton active={mode === 'build'} onClick={() => setMode('build')} title="Build: drag from a hydrogen port to add atoms">
-        <I.Plus size={15} /> <span className="hidden sm:inline">Build</span>
+        <I.Plus size={15} /> <span className={lbl}>Build</span>
       </ToolButton>
       <ToolButton active={mode === 'conformer'} onClick={() => setMode('conformer')} title="Conformer: rotate single bonds">
-        <I.Rotate size={15} /> <span className="hidden sm:inline">Conformer</span>
+        <I.Rotate size={15} /> <span className={lbl}>Conformer</span>
       </ToolButton>
       <ToolButton active={mode === 'measure'} onClick={() => setMode('measure')} title="Measure (M): click 2–4 atoms">
-        <I.Ruler size={15} /> <span className="hidden sm:inline">Measure</span>
+        <I.Ruler size={15} /> <span className={lbl}>Measure</span>
       </ToolButton>
       <div className="mx-1 h-5 w-px bg-border" />
       <select value={style} onChange={(e) => useStudio.setState({ renderStyle: e.target.value as RenderStyle })} className="h-8 rounded-lg bg-transparent px-1.5 text-[12.5px] text-text-2 hover:bg-panel-raised" aria-label="Render style">
@@ -60,7 +63,7 @@ function Toolbar3D() {
         <I.Focus size={15} />
       </ToolButton>
       <ToolButton onClick={() => relaxCurrent()} title="Relax: minimize from the current shape (force field)">
-        <I.Sparkle size={15} /> <span className="hidden md:inline">{geometry === 'relaxing' ? 'Relaxing…' : 'Relax'}</span>
+        <I.Sparkle size={15} /> <span className={compact ? 'hidden' : 'hidden md:inline'}>{geometry === 'relaxing' ? 'Relaxing…' : 'Relax'}</span>
       </ToolButton>
     </div>
   );
