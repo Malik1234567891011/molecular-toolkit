@@ -5,6 +5,7 @@ import { useStudio, studio, type Mode3D, type RenderStyle } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { cleanLayout, freshGeometry } from '@/lib/pipeline';
 import { usePracticeHidesName } from '@/lib/practice';
+import { RoomCursors } from './RoomCursors';
 import { I } from '../ui/icons';
 
 const KitCanvas = dynamic(() => import('../three/KitCanvas'), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-text-3">Loading 3D…</div> });
@@ -183,6 +184,7 @@ export function CanvasArea() {
       <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2">
         <StatusStrip />
       </div>
+      <RoomCursors container={box} />
     </div>
   );
 }

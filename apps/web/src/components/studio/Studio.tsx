@@ -47,6 +47,13 @@ export function Studio() {
           useStudio.getState().notify({ kind: 'warning', text: 'That shared molecule could not be opened (the link may be wrong or offline).' });
         }
       }
+      // Study room link (?room=<id>): join straight away.
+      const roomId = new URLSearchParams(location.search).get('room');
+      if (roomId && /^[\w-]{4,64}$/.test(roomId)) {
+        const { joinRoom } = await import('@/lib/room');
+        useStudio.setState({ panel: 'room', landing: false });
+        void joinRoom(roomId);
+      }
       // Shared problem set link (#set=…): save it locally and open practice.
       if (location.hash.startsWith('#set=')) {
         const { decodeSet, saveSet, loadProgress } = await import('@/lib/practice');
