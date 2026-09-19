@@ -53,6 +53,7 @@ export const I = {
   ChevronLeft: (p: P) => (<svg {...base(p)}><path d="m15 18-6-6 6-6" /></svg>),
   ChevronDown: (p: P) => (<svg {...base(p)}><path d="m6 9 6 6 6-6" /></svg>),
   Mirror: (p: P) => (<svg {...base(p)}><path d="M12 3v18" strokeDasharray="2 2" /><path d="M9 7 4 12l5 5M15 7l5 5-5 5" /></svg>),
+  Resonance: (p: P) => (<svg {...base(p)}><path d="M3 12h18" /><path d="m6 8-4 4 4 4" /><path d="m18 8 4 4-4 4" /></svg>),
   Orbital: (p: P) => (<svg {...base(p)}><path d="M12 12c-3-5-8-6-8-2s5 5 8 2Zm0 0c3 5 8 6 8 2s-5-5-8-2Z" /></svg>),
   Flask: (p: P) => (<svg {...base(p)}><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></svg>),
   Moon: (p: P) => (<svg {...base(p)}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></svg>),

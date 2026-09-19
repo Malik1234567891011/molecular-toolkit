@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import {
-  CipRanker, MolView, acidSites, angleDeg, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
+  CipRanker, MolView, acidSites, angleDeg, resonanceContributors, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
   type AtomId, type BondId, type StereoNeighbour, type Vec3,
 } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
@@ -69,6 +69,25 @@ function InvalidCard() {
 }
 
 // ---------------------------------------------------------------------------------------------
+
+/** Points at the resonance panel when the molecule has more than one contributor. */
+function ResonanceTeaser() {
+  const doc = useStudio((s) => s.doc);
+  const res = useMemo(() => (doc.atoms.length && doc.atoms.length <= 80 ? resonanceContributors(doc, 10) : null), [doc]);
+  if (!res || res.contributors.length < 2) return null;
+  const n = res.contributors.length;
+  return (
+    <Section title="Resonance">
+      <button onClick={() => useStudio.setState({ panel: 'resonance' })} className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-panel-raised px-3 py-2 text-left text-[13px] hover:border-accent" data-testid="resonance-teaser">
+        <span>
+          {n}{n >= 10 ? '+' : ''} contributors{res.equivalent ? ', all equivalent' : ''}
+          <span className="block text-[12px] text-text-2">See the curved arrows and which contributor matters most</span>
+        </span>
+        <I.ChevronRight size={16} className="shrink-0 text-text-3" />
+      </button>
+    </Section>
+  );
+}
 
 /** Most acidic proton: textbook pKa classes with the conjugate-base reason (spec §14). */
 function AcidityCard() {
@@ -194,6 +213,7 @@ function FactsCard() {
         </Section>
       )}
       <AcidityCard />
+      <ResonanceTeaser />
       <Section title="Validation">
         {a.validation.filter((v) => v.code !== 'unspecified-stereo').length === 0 && <div className="flex items-center gap-1.5 text-[13px] text-good"><I.Check size={15} /> Valid structure</div>}
         <ul className="space-y-2">

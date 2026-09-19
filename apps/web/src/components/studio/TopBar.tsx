@@ -58,6 +58,7 @@ function MoreMenu() {
   const items: Array<{ label: string; icon: React.ReactNode; run: () => void; active?: boolean; kbd?: string }> = [
     { label: 'Library & compare', icon: <I.Book size={15} />, run: () => useStudio.setState({ panel: 'library', landing: false }), active: panel === 'library' },
     { label: 'Mechanisms', icon: <I.Flask size={15} />, run: () => useStudio.setState({ panel: 'mechanism', landing: false }), active: panel === 'mechanism' },
+    { label: 'Resonance', icon: <I.Resonance size={15} />, run: () => useStudio.setState({ panel: 'resonance', landing: false }), active: panel === 'resonance' },
     { label: 'Orbitals & ESP', icon: <I.Orbital size={15} />, run: () => useStudio.setState({ panel: 'orbitals', landing: false }), active: panel === 'orbitals' },
     { label: 'Study room', icon: <I.Users size={15} />, run: () => useStudio.setState({ panel: 'room', landing: false }), active: panel === 'room' },
     { label: 'Scan a structure', icon: <I.Scan size={15} />, run: () => bus.emit('open:scan') },

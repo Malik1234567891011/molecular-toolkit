@@ -42,6 +42,7 @@ const COMMANDS: Command[] = [
   { id: 'newman', label: 'Newman projection of a bond', keywords: 'newman sawhorse conformation rotate bond', group: 'Learn', when: hasMol, run: panel('projection') },
   { id: 'fischer', label: 'Fischer projection', keywords: 'fischer wedge dash projection', group: 'Learn', when: hasMol, run: panel('projection') },
   { id: 'mechanism', label: 'Play a reaction mechanism (SN2, E2, …)', keywords: 'mechanism sn2 sn1 e2 e1 arrows curved diels alder', group: 'Learn', run: panel('mechanism') },
+  { id: 'resonance', label: 'Show resonance contributors', keywords: 'resonance contributor delocalized hybrid curved arrows major minor', group: 'Learn', when: hasMol, run: panel('resonance') },
   { id: 'homo', label: 'Show HOMO / LUMO / ESP', keywords: 'orbital homo lumo esp electrostatic density quantum', group: 'Learn', when: hasMol, run: panel('orbitals') },
   { id: 'flip', label: 'Flip stereocentre (R ↔ S)', keywords: 'invert stereocenter flip r s configuration', group: 'Molecule', when: () => !!selectedCentre(), run: () => { const c = selectedCentre(); if (c) studio().apply({ type: 'invertCentres', atomIds: [c] }, { label: 'Flip stereocentre' }); } },
   { id: 'mirror', label: 'Make the mirror image', keywords: 'enantiomer mirror reflect', group: 'Molecule', when: hasMol, run: () => { studio().apply({ type: 'mirror' }, { label: 'Mirror image' }); } },
