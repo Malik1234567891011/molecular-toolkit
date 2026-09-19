@@ -17,6 +17,7 @@ import { Notices } from './Notices';
 import { Shortcuts } from './Shortcuts';
 import { Coach } from './Coach';
 import { ShareDialog } from './ShareDialog';
+import { CommandPalette } from './CommandPalette';
 
 export function Studio() {
   useApplyTheme();
@@ -86,6 +87,7 @@ export function Studio() {
       <Notices />
       <Shortcuts />
       <ShareDialog />
+      <CommandPalette />
     </div>
   );
 }

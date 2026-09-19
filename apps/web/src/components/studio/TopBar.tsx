@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useRef, useState } from 'react';
 import { useStudio, studio, type SidePanel, type ViewMode } from '@/lib/store';
 import { bus } from '@/lib/events';
 import { track } from '@/lib/analytics';
@@ -41,6 +42,46 @@ export function PanelButton({ panel, icon, label, kbd }: { panel: SidePanel; ico
       {icon}
       <span className="hidden xl:inline">{label}</span>
     </button>
+  );
+}
+
+function MoreMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const panel = useStudio((s) => s.panel);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+  const items: Array<{ label: string; icon: React.ReactNode; run: () => void; active?: boolean; kbd?: string }> = [
+    { label: 'Library & compare', icon: <I.Book size={15} />, run: () => useStudio.setState({ panel: 'library', landing: false }), active: panel === 'library' },
+    { label: 'Mechanisms', icon: <I.Flask size={15} />, run: () => useStudio.setState({ panel: 'mechanism', landing: false }), active: panel === 'mechanism' },
+    { label: 'Orbitals & ESP', icon: <I.Orbital size={15} />, run: () => useStudio.setState({ panel: 'orbitals', landing: false }), active: panel === 'orbitals' },
+    { label: 'Study room', icon: <I.Users size={15} />, run: () => useStudio.setState({ panel: 'room', landing: false }), active: panel === 'room' },
+    { label: 'Scan a structure', icon: <I.Scan size={15} />, run: () => bus.emit('open:scan') },
+    { label: 'All commands', icon: <I.Search size={15} />, run: () => useStudio.setState({ paletteOpen: true }), kbd: '⌘K' },
+  ];
+  const anyActive = items.some((i) => i.active);
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" title="More tools" className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium transition ${anyActive || open ? 'bg-accent-soft text-accent-strong' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`} data-testid="more-menu">
+        <I.Grid size={16} />
+        <span className="hidden xl:inline">More</span>
+      </button>
+      {open && (
+        <div role="menu" className="glass fade-up absolute right-0 top-full z-50 mt-2 w-56 rounded-xl p-1">
+          {items.map((it) => (
+            <button key={it.label} role="menuitem" onClick={() => { setOpen(false); it.run(); }} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] ${it.active ? 'bg-accent-soft text-accent-strong' : 'hover:bg-panel-raised'}`}>
+              {it.icon}
+              <span className="flex-1">{it.label}</span>
+              {it.kbd && <kbd className="kbd">{it.kbd}</kbd>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -95,6 +136,7 @@ export function TopBar() {
         <PanelButton panel="projection" icon={<I.Layers size={16} />} label="Projections" />
         <PanelButton panel="practice" icon={<I.Target size={16} />} label="Practice" />
         <PanelButton panel="tutor" icon={<I.Chat size={16} />} label="Tutor" />
+        <MoreMenu />
       </nav>
       <div className="flex items-center gap-1">
         <button onClick={() => bus.emit('open:share')} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text" title="Share / export / AR" aria-label="Share, export or view in AR">
