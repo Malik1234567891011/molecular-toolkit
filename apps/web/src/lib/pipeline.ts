@@ -12,7 +12,31 @@ import type { Analysis, NameCandidate, Verification } from './types';
 import { call } from './worker';
 import { synonymStyleIssue } from './synonyms';
 
-const verifyCache = new Map<string, Verification>();
+/**
+ * Verified names keyed by InChIKey + profile + engine version, persisted so that reopening a
+ * molecule shows its verified name without waiting for the network (spec §18: cached name
+ * resolution < 200 ms). Only completed verifications are stored; offline results never are.
+ */
+const VERIFY_STORE = 'orbital.verify.v1';
+const verifyCache = new Map<string, Verification>(loadVerifyCache());
+function loadVerifyCache(): Array<[string, Verification]> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(VERIFY_STORE) : null;
+    return raw ? (JSON.parse(raw) as Array<[string, Verification]>) : [];
+  } catch {
+    return [];
+  }
+}
+function rememberVerification(key: string, v: Verification): void {
+  verifyCache.delete(key);
+  verifyCache.set(key, v);
+  while (verifyCache.size > 60) verifyCache.delete(verifyCache.keys().next().value!);
+  try {
+    localStorage.setItem(VERIFY_STORE, JSON.stringify([...verifyCache]));
+  } catch {
+    /* storage full or blocked: the in-memory cache still works */
+  }
+}
 let analysisTimer: ReturnType<typeof setTimeout> | undefined;
 let relaxTimer: ReturnType<typeof setTimeout> | undefined;
 let verifyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -251,7 +275,7 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
         : 'No verified name for this structure yet.'
       : undefined,
   };
-  verifyCache.set(cacheKey, out);
+  if (out.status === 'done') rememberVerification(cacheKey, out);
   useStudio.setState({ verification: out });
   if (primary) track('structure_name_verified', { provenance: primary.provenance });
   else track('structure_name_unsupported', {});

@@ -99,7 +99,12 @@ function CameraRig() {
     if (!controls || fitted.current) return;
     fitted.current = true;
     const t = setTimeout(() => bus.emit('fit', 'orient'), 60);
-    return () => clearTimeout(t);
+    // Panels that want a particular view (the chair's side-on view) re-apply it after a remount.
+    const r = setTimeout(() => bus.emit('canvas:ready'), 420);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(r);
+    };
   }, [controls]);
   return null;
 }
@@ -340,20 +345,27 @@ export default function KitCanvas() {
   const theme = useResolvedTheme();
   const [lost, setLost] = useState(false);
   const [generation, setGeneration] = useState(0);
-  const retried = useRef(0);
+  const attempts = useRef<number[]>([]);
   const [palette, setPalette] = useState<PaletteRequest | null>(null);
-  // Give the browser a moment to restore a lost context; otherwise remount once automatically.
+  // A lost context (GPU reset, too many contexts, tab in the background) is recovered by
+  // remounting the canvas: up to three tries a minute with backoff, and again whenever the tab
+  // comes back into view. The manual button is the last resort, never the first.
   useEffect(() => {
     if (!lost) return;
-    const now = Date.now();
-    if (document.visibilityState === 'visible' && now - retried.current > 10000) {
-      retried.current = now;
-      const t = setTimeout(() => {
-        setLost(false);
-        setGeneration((g) => g + 1);
-      }, 600);
-      return () => clearTimeout(t);
-    }
+    const restore = () => {
+      attempts.current = [...attempts.current.filter((t) => Date.now() - t < 60000), Date.now()];
+      setLost(false);
+      setGeneration((g) => g + 1);
+    };
+    const recent = attempts.current.filter((t) => Date.now() - t < 60000).length;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (recent < 3 && document.visibilityState === 'visible') timer = setTimeout(restore, [500, 2000, 6000][recent]);
+    const onVisible = () => { if (document.visibilityState === 'visible') restore(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [lost]);
   useEffect(() => {
     const a = bus.on('palette:open', (r) => setPalette(r as PaletteRequest));

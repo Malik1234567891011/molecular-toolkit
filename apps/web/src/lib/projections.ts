@@ -196,8 +196,15 @@ export function idealChairDrawing(scale = 1): ChairDrawing {
     const phi = Math.PI + (k * Math.PI) / 3; // atom 0 = left tip
     pts.push([R * Math.cos(phi), R * Math.sin(phi), k % 2 === 0 ? -h : h]);
   }
-  const el = (12 * Math.PI) / 180;
-  const project = (p: Vec3): [number, number] => [p[0] * scale, -(p[2] * Math.cos(el) + p[1] * Math.sin(el)) * scale];
+  const el = (16 * Math.PI) / 180;
+  // A slight turn about the ring axis, as textbooks draw it: without it the front and back
+  // carbons sit directly above each other and their axial bonds overlap.
+  const az = (14 * Math.PI) / 180;
+  const project = (p: Vec3): [number, number] => {
+    const x = p[0] * Math.cos(az) - p[1] * Math.sin(az);
+    const y = p[0] * Math.sin(az) + p[1] * Math.cos(az);
+    return [x * scale, -(p[2] * Math.cos(el) + y * Math.sin(el)) * scale];
+  };
   const half = (109.47 / 2) * (Math.PI / 180);
   const axial: Array<[number, number]> = [];
   const equatorial: Array<[number, number]> = [];

@@ -557,6 +557,7 @@ function ChairTab() {
     ]);
   }, [chair, showH, doc.bonds]);
 
+  useEffect(() => bus.on('canvas:ready', () => { if (chair?.isChair) sideViewRef.current(); }), [chair?.isChair]);
   useEffect(() => {
     const key = ring?.join(',') ?? null;
     if (!key || !chair?.isChair || viewedRing.current === key) return;
@@ -633,9 +634,14 @@ function ChairTab() {
   // Map drawing positions onto ring atoms so up/down carbons agree with the model.
   const mapping = chair && conf ? mapChair(chair.z, drawing.up, trace?.numbering.locantOf, ring, ring.map((a) => conf.coordinates[a]), chair.normal) : null;
   const ink = theme === 'dark' ? '#dfe3ea' : '#1b1e24';
-  const ox = 180;
-  const oy = 84;
-  const P = (p: [number, number]): [number, number] => [ox + p[0], oy + p[1]];
+  // Fit the viewBox to the drawing (ring, bonds and room for labels) so nothing is clipped.
+  const allPts = [...drawing.ring, ...drawing.axial, ...drawing.equatorial];
+  const minX = Math.min(...allPts.map((p) => p[0])) - 34;
+  const maxX = Math.max(...allPts.map((p) => p[0])) + 34;
+  const minY = Math.min(...allPts.map((p) => p[1])) - 14;
+  const maxY = Math.max(...allPts.map((p) => p[1])) + 14;
+  const P = (p: [number, number]): [number, number] => [p[0] - minX, p[1] - minY];
+  const ringCentre = drawing.ring.reduce<[number, number]>((c, p) => [c[0] + p[0] / 6, c[1] + p[1] / 6], [0, 0]);
   const label = (key: string, ringAtom: AtomId) => (key.includes('.') ? 'H' : condensed(doc, key, ringAtom));
   const colorOf = (el: string) => (el === 'H' ? 'var(--text-3)' : el === 'C' ? ink : atomColor(el, theme));
 
@@ -650,7 +656,7 @@ function ChairTab() {
       )}
       <div className="rounded-xl border border-border bg-panel-raised p-1">
         {chair?.isChair && mapping ? (
-          <svg viewBox="0 0 360 168" className="w-full" role="img" aria-label="Chair drawing with axial and equatorial positions" data-testid="chair-svg">
+          <svg viewBox={`0 0 ${(maxX - minX).toFixed(0)} ${(maxY - minY).toFixed(0)}`} className="w-full" role="img" aria-label="Chair drawing with axial and equatorial positions" data-testid="chair-svg">
             {drawing.ring.map((p, k) => {
               const q = drawing.ring[(k + 1) % 6];
               const [x1, y1] = P(p);
@@ -669,15 +675,20 @@ function ChairTab() {
                 s ? (
                   <g>
                     <line x1={cx} y1={cy} x2={x} y2={y} stroke={s.element === 'H' ? 'var(--text-3)' : ink} strokeWidth={s.element === 'H' ? 1.3 : 2} />
-                    <text x={x + dx} y={y + dy} textAnchor={anchor} dominantBaseline="central" fontSize={s.element === 'H' ? 9 : 11.5} fontWeight={s.element === 'H' ? 500 : 700} fill={colorOf(s.element)}>{label(s.key, atom)}</text>
+                    <text x={x + dx} y={y + dy} textAnchor={anchor} dominantBaseline="central" fontSize={s.element === 'H' ? 10 : 12} fontWeight={s.element === 'H' ? 500 : 700} fill={colorOf(s.element)}>{label(s.key, atom)}</text>
                   </g>
                 ) : null;
               const up = drawing.up[k] > 0;
               return (
                 <g key={`s${k}`}>
-                  {put(ax, axx, axy, 0, up ? -7 : 7, 'middle')}
+                  {put(ax, axx, axy, 0, up ? -8 : 8, 'middle')}
                   {put(eq, eqx, eqy, eqx < cx ? -3 : 3, 0, eqx < cx ? 'end' : 'start')}
-                  {mapping.locants[k] && <text x={cx + (k < 3 ? -2 : 2)} y={cy + (up ? 11 : -11)} textAnchor="middle" fontSize={8.5} fill="var(--text-3)">{mapping.locants[k]}</text>}
+                  {mapping.locants[k] && (() => {
+                    // Ring numbers sit just inside the ring, clear of every bond.
+                    const [rx, ry] = P(ringCentre);
+                    const d = Math.hypot(rx - cx, ry - cy) || 1;
+                    return <text x={cx + ((rx - cx) / d) * 12} y={cy + ((ry - cy) / d) * 9} textAnchor="middle" dominantBaseline="central" fontSize={9.5} fontWeight={700} fill="var(--text-2)" stroke="var(--panel-raised)" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>{mapping.locants[k]}</text>;
+                  })()}
                 </g>
               );
             })}
