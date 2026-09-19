@@ -7,7 +7,7 @@
  */
 import * as OCL from 'openchemlib';
 import {
-  computeFormula, detectFunctionalGroups, summarizeGroups, validateDocument, perceiveStereo, writeSmiles, writeMolfileV2000,
+  computeFormula, detectFunctionalGroups, summarizeGroups, validateDocument, perceiveStereo, stereoMismatches, writeSmiles, writeMolfileV2000,
   parseMolfile, parseSmiles, MolView, localGeometry, placeHydrogens, rotateFragment, sideOfBond, alignTo, wedgesFromStereo,
   naming, type MoleculeDocument, type Vec3, type Conformer, type Vec2,
 } from '@orbital/chem';
@@ -190,10 +190,17 @@ function readCoords(b: OclBuild): Record<string, Vec3> {
 
 function relax(doc: MoleculeDocument, coords: Record<string, Vec3>, maxIts = 600): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
   const full = placeHydrogens(doc, coords, doc.atoms.filter((a) => !coords[`${a.id}.h1`] && new MolView(doc).implicitH(new MolView(doc).idx(a.id)) > 0).map((a) => a.id));
+  // A force field keeps the handedness it starts from; if the idealized placement contradicts
+  // a stored R/S or E/Z, rebuild from the graph instead of minimizing the wrong isomer.
+  const wrong = stereoMismatches(doc, full);
+  if (wrong.centres.length || wrong.bonds.length) return freshConformer(doc, coords);
   const b = oclFromCoords(doc, full);
   const ff = new OCL.ForceFieldMMFF94(b.mol, OCL.ForceFieldMMFF94.MMFF94SPLUS, {});
   const code = ff.minimise({ maxIts, gradTol: 1e-4, funcTol: 1e-6 });
-  return { coords: readCoords(b), energy: ff.getTotalEnergy(), converged: code === 0, method: 'MMFF94s+ (OpenChemLib), gas phase' };
+  const out = readCoords(b);
+  const after = stereoMismatches(doc, out);
+  if (after.centres.length || after.bonds.length) return freshConformer(doc, coords);
+  return { coords: out, energy: ff.getTotalEnergy(), converged: code === 0, method: 'MMFF94s+ (OpenChemLib), gas phase' };
 }
 
 function energy(doc: MoleculeDocument, coords: Record<string, Vec3>): number {
@@ -202,8 +209,18 @@ function energy(doc: MoleculeDocument, coords: Record<string, Vec3>): number {
   return ff.getTotalEnergy();
 }
 
-/** Fresh conformer honouring stored stereo (SMILES → OCL conformer generator → MMFF). */
-function freshConformer(doc: MoleculeDocument, previous?: Record<string, Vec3>, seed = 42): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
+/** Fresh conformer honouring stored stereo, checked against the graph (retries other seeds). */
+function freshConformer(doc: MoleculeDocument, previous?: Record<string, Vec3>, seed0?: number): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
+  let last: ReturnType<typeof freshConformerOnce> | null = null;
+  for (const seed of [seed0 ?? 42, 7, 1234, 99]) {
+    last = freshConformerOnce(doc, previous, seed);
+    const wrong = stereoMismatches(doc, last.coords);
+    if (!wrong.centres.length && !wrong.bonds.length) return last;
+  }
+  throw new Error('no conformer matched the stored stereochemistry');
+}
+
+function freshConformerOnce(doc: MoleculeDocument, previous: Record<string, Vec3> | undefined, seed: number): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
   const w = writeSmiles(doc);
   const mol = OCL.Molecule.fromSmiles(w.smiles);
   mol.addImplicitHydrogens();
@@ -316,7 +333,7 @@ self.onmessage = async (ev: MessageEvent<Req>) => {
         result = relax(args.doc as MoleculeDocument, args.coords as Record<string, Vec3>, (args.maxIts as number) ?? 600);
         break;
       case 'fresh':
-        result = freshConformer(args.doc as MoleculeDocument, args.previous as Record<string, Vec3> | undefined, (args.seed as number) ?? 42);
+        result = freshConformer(args.doc as MoleculeDocument, args.previous as Record<string, Vec3> | undefined, args.seed as number | undefined);
         break;
       case 'energy':
         result = energy(args.doc as MoleculeDocument, args.coords as Record<string, Vec3>);

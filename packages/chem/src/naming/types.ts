@@ -30,6 +30,8 @@ export interface ParentAlternative {
 
 export interface NumberingAlternative {
   orderedAtomIds: AtomId[];
+  /** Locant each parent atom would get under this numbering. */
+  locantOf: Record<AtomId, string>;
   locants: number[];
   criterion: string;
   firstPointOfDifference: string;
@@ -77,7 +79,7 @@ export interface NamingTrace {
     orderedAtomIds: AtomId[];
     reason: string;
     alternative?: NumberingAlternative;
-    locantOf: Record<AtomId, number>;
+    locantOf: Record<AtomId, string>;
   };
   substituents: SubstituentTrace[];
   stereo: StereoTrace[];

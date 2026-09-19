@@ -11,11 +11,24 @@ type Token = naming.NameToken;
 
 export function stepForToken(t: Token): number {
   if (t.role === 'stereo') return 4;
-  if (t.role === 'suffix') return 0;
-  if (t.role === 'locant') return t.ref?.startsWith('sub:') ? 2 : t.ref === 'suffix' ? 2 : 2;
-  if (t.ref?.startsWith('sub:') || t.role === 'substituent' || t.role === 'multiplier') return 3;
+  if (t.role === 'locant') return 2;
+  if (t.ref?.startsWith('sub:')) return 3;
+  if (t.role === 'suffix' || t.ref === 'suffix') return 0;
   if (t.role === 'parent' || t.role === 'unsaturation' || t.role === 'hydro') return 1;
   return 5;
+}
+
+/** Tokens that a naming step is about (the rest are dimmed while that step is shown). */
+export function tokenInStep(t: Token, step: number): boolean {
+  const sub = !!t.ref?.startsWith('sub:');
+  switch (step) {
+    case 0: return !sub && (t.ref === 'suffix' || t.role === 'suffix');
+    case 1: return !sub && t.role !== 'stereo' && t.role !== 'locant' && t.ref !== 'suffix' && t.role !== 'punct';
+    case 2: return t.role === 'locant';
+    case 3: return sub && t.role !== 'locant';
+    case 4: return t.role === 'stereo';
+    default: return true;
+  }
 }
 
 function tokenColor(t: Token): string | undefined {
@@ -24,7 +37,7 @@ function tokenColor(t: Token): string | undefined {
 }
 
 /** The live name with clickable tokens (spec §9.4: click a word, watch its atoms light up — and the reverse). */
-export function NameTokens({ tokens, interactive = true, size = 'lg' }: { tokens: Token[]; interactive?: boolean; size?: 'lg' | 'md' | 'sm' }) {
+export function NameTokens({ tokens, interactive = true, size = 'lg', emphasis }: { tokens: Token[]; interactive?: boolean; size?: 'lg' | 'md' | 'sm'; emphasis?: (t: Token) => boolean }) {
   const selection = useStudio((s) => s.selection.atoms);
   const hover = useStudio((s) => s.hoverAtom);
   const focusAtoms = useMemo(() => new Set([...selection, ...(hover ? [hover] : [])]), [selection, hover]);
@@ -37,6 +50,7 @@ export function NameTokens({ tokens, interactive = true, size = 'lg' }: { tokens
         const color = tokenColor(t);
         const italic = t.role === 'stereo' && /[RSEZ]|cis|trans/.test(t.text);
         const clickable = interactive && t.atomIds.length > 0;
+        const dim = emphasis ? !emphasis(t) : false;
         return (
           <span
             key={k}
@@ -65,6 +79,8 @@ export function NameTokens({ tokens, interactive = true, size = 'lg' }: { tokens
               textDecorationThickness: color ? '2px' : undefined,
               textUnderlineOffset: '4px',
               whiteSpace: 'pre',
+              opacity: dim ? 0.32 : 1,
+              transition: 'opacity 220ms ease, color 160ms ease',
             }}
           >
             {t.text}

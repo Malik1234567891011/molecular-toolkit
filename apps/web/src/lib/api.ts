@@ -84,7 +84,7 @@ export interface GenerateResponse {
   identifiers: { canonicalSmiles: string; inchi: string; inchiKey: string; formula: string };
   stereo: { complete: boolean; unspecifiedCentres: number[]; unspecifiedDoubleBonds: number[] };
   course: Array<{ name: string; kind: string; status: string; provenance: string; message?: string; parsedSmiles?: string }>;
-  database: { status: string; cid?: number; iupacName?: string; title?: string; synonyms?: string[]; iupacVerified?: boolean; reason?: string };
+  database: { status: string; cid?: number; iupacName?: string; title?: string; synonyms?: string[]; synonymDetails?: Array<{ name: string; checked: boolean; kind: 'cas-index' | 'systematic' | 'common' }>; iupacVerified?: boolean; reason?: string };
   ml: { status: string; reason?: string; name?: string; provenance?: string };
   engine: { opsin: string; rdkit: string; standardization: string };
 }

@@ -1266,7 +1266,9 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     if (seen.has(key)) continue;
     seen.add(key);
     const cmp = compareScores(winner, scores(ctx, x));
-    const crit = cmp.criterion ?? 'alphanumeric';
+    // Every criterion tied: an equivalent (symmetry-related) choice that yields the same name.
+    if (!cmp.criterion) continue;
+    const crit = cmp.criterion;
     const fmt = (v: number | number[] | undefined) => (Array.isArray(v) ? v.join(',') : String(v ?? ''));
     alts.push({
       atomIds: x.atoms.map(id), label: x.label, criterion: crit,
@@ -1276,7 +1278,14 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
   }
   const instructive = ['substituentCount', 'length', 'multipleBonds', 'substituentLocants', 'alphaLocants', 'doubleBonds', 'principalLocants', 'multiLocants', 'doubleLocants', 'ringOverChain', 'largerUnit', 'principalCount', 'carboMode', 'alphanumeric'];
   alts.sort((p, q) => instructive.indexOf(p.criterion) - instructive.indexOf(q.criterion) || q.atomIds.length - p.atomIds.length);
-  const topAlts = alts.slice(0, 6);
+  // Symmetry-related candidates rejected for the same reason teach nothing new; show one.
+  const reasons = new Set<string>();
+  const topAlts = alts.filter((x) => {
+    const k = `${x.label}|${x.rejectedBecause}`;
+    if (reasons.has(k)) return false;
+    reasons.add(k);
+    return true;
+  }).slice(0, 6);
   const parentText = c.kind === 'chain'
     ? `The parent is the ${c.atoms.length}-carbon chain${pk ? ' that carries the principal group' : ''}${topAlts.length ? `. The ${topAlts[0].label} was rejected because ${topAlts[0].rejectedBecause}` : ''}.`
     : `The parent is the ${c.ring!.describe}${topAlts.length ? `. The ${topAlts[0].label} was rejected because ${topAlts[0].rejectedBecause}` : ''}.`;
@@ -1288,11 +1297,11 @@ function buildTrace(ctx: Ctx, r: Assembled, pk: CGKind | null, groups: CharGroup
     const va = b.vecs.find((v) => v.name === crit)?.vec ?? [];
     const vb = c.runnerUp.vecs.find((v) => v.name === crit)?.vec ?? [];
     const fd = firstDifference(va, vb);
-    alternative = { orderedAtomIds: c.runnerUp.n.atoms.map(id), locants: vb, chosenLocants: va, criterion: crit, firstPointOfDifference: fd ? `${fd.a} vs ${fd.b}` : `{${va.join(',')}} vs {${vb.join(',')}}` };
+    alternative = { orderedAtomIds: c.runnerUp.n.atoms.map(id), locantOf: Object.fromEntries(c.runnerUp.n.atoms.map((a, k) => [id(a), c.runnerUp!.n.labels[k] ?? String(c.runnerUp!.n.values[k])])), locants: vb, chosenLocants: va, criterion: crit, firstPointOfDifference: fd ? `${fd.a} vs ${fd.b}` : `{${va.join(',')}} vs {${vb.join(',')}}` };
     reason = `Number so that ${NUMBERING_CRITERIA_TEXT[crit] ?? crit}: {${va.join(',')}} beats {${vb.join(',')}}${fd ? ` — the first point of difference is ${fd.a} vs ${fd.b}` : ''}.`;
   }
-  const locantOf: Record<AtomId, number> = {};
-  b.n.atoms.forEach((a, k) => (locantOf[id(a)] = b.n.values[k]));
+  const locantOf: Record<AtomId, string> = {};
+  b.n.atoms.forEach((a, k) => (locantOf[id(a)] = b.n.labels[k] ?? String(b.n.values[k])));
   const unspecified = new Set<number>(r.unspecified);
   for (const sc of ctx.stereo.centres) {
     const i = ctx.view.index.get(sc.atomId)!;

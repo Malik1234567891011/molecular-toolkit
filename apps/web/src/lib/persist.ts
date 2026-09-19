@@ -5,7 +5,7 @@
  * molecules are kept for the library and offline use.
  */
 import { get, set, del, keys } from 'idb-keyval';
-import type { MoleculeDocument } from '@orbital/chem';
+import { stereoMismatches, type MoleculeDocument } from '@orbital/chem';
 import { studio, useStudio, type Settings } from './store';
 
 const CURRENT = 'orbital:current';
@@ -29,7 +29,11 @@ export async function restore(): Promise<boolean> {
     const [doc, settings] = await Promise.all([get<MoleculeDocument>(CURRENT), get<Partial<Settings>>(SETTINGS)]);
     if (settings) studio().setSettings(settings);
     if (doc && doc.atoms?.length) {
-      useStudio.setState({ doc, version: studio().version + 1, landing: false, geometry: doc.conformers?.length ? 'relaxed' : 'none' });
+      // A saved geometry that contradicts the stored R/S or E/Z (older sessions) is rebuilt.
+      const conf = doc.conformers?.find((c) => c.id === doc.selectedConformerId) ?? doc.conformers?.[0];
+      const wrong = conf ? stereoMismatches(doc, conf.coordinates) : null;
+      const stale = !!wrong && (wrong.centres.length > 0 || wrong.bonds.length > 0);
+      useStudio.setState({ doc, version: studio().version + 1, landing: false, geometry: stale ? 'idealized' : doc.conformers?.length ? 'relaxed' : 'none' });
       return true;
     }
   } catch {

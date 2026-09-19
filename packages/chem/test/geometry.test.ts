@@ -65,3 +65,15 @@ describe('bond rotation', () => {
     for (const k of ['a1', 'a2', 'a3']) expect(Math.hypot(...back[k].map((x, i) => x - c[k][i]))).toBeLessThan(1e-3);
   });
 });
+
+describe('stereoMismatches', () => {
+  it('flags a conformer with the wrong handedness and passes its mirror image', async () => {
+    const { parseSmiles, updateConformer, stereoMismatches } = await import('../src/index.ts');
+    const doc = parseSmiles('C[C@@H](O)CC').doc;
+    const conf = updateConformer(doc, undefined, doc.atoms.map((a) => a.id));
+    const mirror = Object.fromEntries(Object.entries(conf.coordinates).map(([k, p]) => [k, [-p[0], p[1], p[2]] as [number, number, number]]));
+    const a = stereoMismatches(doc, conf.coordinates).centres.length;
+    const b = stereoMismatches(doc, mirror).centres.length;
+    expect(a + b).toBe(1);
+  });
+});

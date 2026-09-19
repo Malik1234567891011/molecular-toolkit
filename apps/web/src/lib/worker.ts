@@ -1,5 +1,7 @@
 'use client';
 /** Promise RPC to the chemistry worker (public/workers/chem.worker.js). */
+import { WORKER_VERSION } from './asset-version';
+
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 let worker: Worker | null = null;
@@ -8,7 +10,7 @@ const pending = new Map<number, Pending>();
 
 function get(): Worker {
   if (worker) return worker;
-  worker = new Worker('/workers/chem.worker.js');
+  worker = new Worker(`/workers/chem.worker.js?v=${WORKER_VERSION}`);
   worker.onmessage = (ev: MessageEvent<{ id: number; ok: boolean; result?: unknown; error?: string }>) => {
     const p = pending.get(ev.data.id);
     if (!p) return;

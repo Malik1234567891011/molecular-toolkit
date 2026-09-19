@@ -285,6 +285,32 @@ def _plausible_synonym(s: str) -> bool:
     return True
 
 
+async def vet_synonyms(target, raw: list[str], exclude: list[str], limit: int = 8) -> list[dict[str, Any]]:
+    """PubChem synonyms are user-deposited and sometimes name a different compound. Every
+    synonym that OPSIN can parse must round-trip to this exact structure; names OPSIN cannot
+    parse (trade and trivial names) are kept but marked as not structure-checked."""
+    seen = {e.strip().rstrip(".").lower() for e in exclude if e}
+    out: list[dict[str, Any]] = []
+    for s in raw:
+        name = s.strip().rstrip(".").strip()
+        key = name.lower()
+        if key in seen or not _plausible_synonym(name):
+            continue
+        seen.add(key)
+        v = await verify_name(target, name)
+        if v["status"] in ("mismatch", "stereo_mismatch"):
+            continue  # a wrong name deposited against this record — never shown
+        cas_index = bool(re.search(r", .*-$|^[A-Z][a-z]+, ", name))
+        out.append({
+            "name": name,
+            "checked": v["status"] == "verified",
+            "kind": "cas-index" if cas_index else "systematic" if v["status"] == "verified" else "common",
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 async def generate(smiles: str, course: list[dict[str, Any]]) -> dict[str, Any]:
     target = chemistry.mol_from_text(smiles)
     ids = chemistry.identifiers(target)
@@ -298,9 +324,9 @@ async def generate(smiles: str, course: list[dict[str, Any]]) -> dict[str, Any]:
         cids = await pubchem.cids_for_inchikey(ids["inchiKey"])
         if cids:
             props = (await pubchem.properties_for_cids(cids[:1]))[0]
-            syn = [s for s in await pubchem.synonyms(cids[0], 40) if _plausible_synonym(s)][:10]
-            database = {"status": "found", "cid": cids[0], "iupacName": props["iupacName"], "title": props["title"], "synonyms": syn,
-                        "provenance": "database_name"}
+            details = await vet_synonyms(target, await pubchem.synonyms(cids[0], 40), [props.get("iupacName") or ""])
+            database = {"status": "found", "cid": cids[0], "iupacName": props["iupacName"], "title": props["title"],
+                        "synonyms": [d["name"] for d in details], "synonymDetails": details, "provenance": "database_name"}
             if props.get("iupacName"):
                 v = await verify_name(target, props["iupacName"])
                 database["iupacVerified"] = v["status"] == "verified"

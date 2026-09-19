@@ -275,3 +275,35 @@ export function dihedral(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3): number {
   const y = dot(cross(b1, v), w);
   return (Math.atan2(y, x) * 180) / Math.PI;
 }
+
+/**
+ * Stored configurations that a set of 3D coordinates contradicts. Force fields keep whatever
+ * handedness they start from, so every geometry is checked against the graph before display.
+ */
+export function stereoMismatches(doc: MoleculeDocument, coords: Record<string, Vec3>): { centres: AtomId[]; bonds: string[] } {
+  const centres: AtomId[] = [];
+  const bonds: string[] = [];
+  for (const a of doc.atoms) {
+    if (!a.stereo) continue;
+    const c = coords[a.id];
+    if (!c) continue;
+    const explicit = a.stereo.order.filter((n) => n !== 'H' && n !== 'LP').map((n) => coords[n]).filter(Boolean);
+    const pos: Vec3[] = [];
+    for (const nb of a.stereo.order) {
+      if (nb === 'H') pos.push(coords[`${a.id}.h1`] ?? implicitPosition(c, explicit));
+      else if (nb === 'LP') pos.push(implicitPosition(c, explicit));
+      else pos.push(coords[nb]);
+    }
+    if (pos.some((p) => !p)) continue;
+    const parity = parityFromPositions(pos);
+    if (parity && parity !== a.stereo.parity) centres.push(a.id);
+  }
+  for (const b of doc.bonds) {
+    if (b.order !== 2 || !b.stereo) continue;
+    const p = [b.stereo.refs[0], b.a1, b.a2, b.stereo.refs[1]].map((id) => coords[id]);
+    if (p.some((x) => !x)) continue;
+    const d = Math.abs(dihedral(p[0], p[1], p[2], p[3]));
+    if ((d < 90 ? 'cis' : 'trans') !== b.stereo.config) bonds.push(b.id);
+  }
+  return { centres, bonds };
+}

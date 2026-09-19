@@ -1,6 +1,6 @@
 'use client';
 import { create } from 'zustand';
-import { emptyDocument, naming, parseMolfile, parseSmiles, suppressHydrogens, updateConformer, type MoleculeDocument } from '@orbital/chem';
+import { emptyDocument, naming, parseMolfile, parseSmiles, stereoMismatches, suppressHydrogens, updateConformer, type MoleculeDocument } from '@orbital/chem';
 import { api, isOnline, type ResolveCandidate, type ResolveResponse } from './api';
 import { track } from './analytics';
 import { bus } from './events';
@@ -61,7 +61,14 @@ export async function loadStructure(text: string, title?: string, label = 'Load 
   }
   const hasImported3D = doc.conformers.length > 0;
   if (!hasImported3D) {
-    const conf = updateConformer(doc, undefined, doc.atoms.map((a) => a.id));
+    let conf = updateConformer(doc, undefined, doc.atoms.map((a) => a.id));
+    // The idealized preview ignores R/S; when every centre came out mirrored, mirror the preview
+    // (E/Z is unaffected) so the wrong isomer never flashes before the worker's geometry lands.
+    const wrong = stereoMismatches(doc, conf.coordinates);
+    const specified = doc.atoms.filter((a) => a.stereo).length;
+    if (wrong.centres.length && wrong.centres.length === specified) {
+      conf = { ...conf, coordinates: Object.fromEntries(Object.entries(conf.coordinates).map(([k, p]) => [k, [-p[0], p[1], p[2]] as [number, number, number]])) };
+    }
     doc = { ...doc, conformers: [conf], selectedConformerId: conf.id };
   }
   studio().replace(doc, label);

@@ -35,6 +35,7 @@ export function startPipeline(): void {
     }
   });
   scheduleAnalysis(0);
+  if (studio().geometry === 'idealized') scheduleRelax();
 }
 
 export function scheduleAnalysis(delay = 60): void {
@@ -81,6 +82,9 @@ async function runRelax(): Promise<void> {
     const r = await call<{ coords: Record<string, [number, number, number]>; energy: number; converged: boolean; method: string }>('relax', {
       doc: stripForWorker(s.doc), coords: conf.coordinates, maxIts: 800,
     });
+    // A newer geometry (fresh conformer, conformer drag) arrived meanwhile: this result is stale.
+    const cur = studio().doc;
+    if ((cur.conformers.find((c) => c.id === cur.selectedConformerId) ?? cur.conformers[0]) !== conf) return;
     studio().setConformer({ id: conf.id, coordinates: r.coords, method: r.method, energy: r.energy, converged: r.converged }, 'relaxed', r.converged ? '' : 'not fully converged', version);
   } catch (e) {
     if (studio().version !== version) return;
@@ -208,10 +212,16 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
     if (!primary) primary = dbName;
     else if (dbName.name !== primary.name && !accepted.some((a) => a.name === dbName.name)) accepted.push(dbName);
   }
-  if (db.status === 'found' && db.synonyms) {
-    for (const syn of db.synonyms.slice(0, 6)) {
-      if ([primary?.name, ...accepted.map((a) => a.name)].some((x) => x?.toLowerCase() === syn.toLowerCase())) continue;
-      accepted.push({ name: syn, provenance: 'accepted_common', source: 'pubchem', verified: true, note: 'PubChem synonym' });
+  if (db.status === 'found') {
+    const details = db.synonymDetails ?? (db.synonyms ?? []).map((name) => ({ name, checked: false, kind: 'common' as const }));
+    const NOTE = {
+      'cas-index': 'CAS index name (inverted), parses to this structure',
+      systematic: 'PubChem synonym; parses to this structure but is not the preferred form',
+      common: 'PubChem synonym (trivial or trade name, not structure-checked)',
+    };
+    for (const syn of details.slice(0, 6)) {
+      if ([primary?.name, ...accepted.map((a) => a.name)].some((x) => x?.toLowerCase() === syn.name.toLowerCase())) continue;
+      accepted.push({ name: syn.name, provenance: 'accepted_common', source: 'pubchem', verified: syn.checked, note: NOTE[syn.kind] });
     }
   }
   const out: Verification = {
