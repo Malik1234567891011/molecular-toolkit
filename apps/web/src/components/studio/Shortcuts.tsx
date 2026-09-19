@@ -175,6 +175,12 @@ export function Shortcuts() {
         setBondOrder(s.selection.bonds[0], Number(k) as 1 | 2 | 3);
         return;
       }
+      // With the ring tool on, a digit is the ring size — the common reason to reach for one.
+      if (s.tool2d === 'ring' && /^[3-8]$/.test(k) && !s.selection.bonds.length) {
+        useStudio.setState({ ringSize: Number(k), ringAromatic: false });
+        studio().notify({ kind: 'info', text: `${k}-membered ring ready — click the canvas to place it.` }, 2500);
+        return;
+      }
       if (k === 'r') {
         useStudio.setState({ tool2d: 'ring', view: s.view === '3d' ? 'split' : s.view });
         return;

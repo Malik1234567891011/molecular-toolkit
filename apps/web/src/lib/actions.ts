@@ -129,6 +129,16 @@ export async function resolveQuery(query: string): Promise<void> {
     }
   } else if (res.status === 'ambiguous') {
     track('input_name_ambiguous', {});
+    // A formula isn't an ambiguous name — it's a question about every structure it can make.
+    // Answer it from the bonding rules; fall back to the database hits when it's too big.
+    if (res.input.interpretedAs.includes('formula')) {
+      const { openIsomers, parseFormula } = await import('./isomers');
+      const counts = parseFormula(res.input.normalized);
+      if (counts && (await openIsomers(counts, res.input.normalized)) > 0) {
+        search.set({ cards: [], result: null });
+        return;
+      }
+    }
     const docs = res.candidates.map((c) => parseSmiles(c.canonicalSmiles).doc);
     let diff: string[][] = docs.map(() => []);
     try {
@@ -171,6 +181,10 @@ async function offlineResolve(q: string): Promise<boolean> {
   } catch {
     /* not SMILES */
   }
+  // Isomers of a formula are worked out in the browser, so they work with no connection.
+  const { openIsomers, parseFormula } = await import('./isomers');
+  const counts = parseFormula(q);
+  if (counts && /\d/.test(q) && (await openIsomers(counts, q)) > 0) return true;
   const hit = naming.COMMON_NAMES.find((c) => c.name.toLowerCase() === q.toLowerCase());
   if (hit) return loadStructure(hit.smiles, hit.name, `Load ${hit.name}`);
   return false;

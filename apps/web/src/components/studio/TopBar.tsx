@@ -127,8 +127,10 @@ export function TopBar() {
   const canUndo = useStudio((s) => s.past.length > 0);
   const canRedo = useStudio((s) => s.future.length > 0);
   const hasMol = useStudio((s) => s.doc.atoms.length > 0);
+  // z-40 keeps this above the start screen (z-30), so search results and the name menu drop
+  // down over it instead of behind it.
   return (
-    <header className="panel relative z-30 flex h-14 shrink-0 items-center gap-1.5 border-x-0 border-t-0 px-2 sm:gap-3 sm:px-3">
+    <header className="panel relative z-40 flex h-14 shrink-0 items-center gap-1.5 border-x-0 border-t-0 px-2 sm:gap-3 sm:px-3">
       <button onClick={() => useStudio.setState({ landing: true })} className="flex items-center gap-2 pr-1" aria-label="Orbital home">
         <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden>
           <defs>

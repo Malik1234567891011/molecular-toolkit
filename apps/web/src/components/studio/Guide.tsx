@@ -88,6 +88,18 @@ const CHAPTERS: Chapter[] = [
         tryIt: { label: 'Look up caffeine', run: () => show('caffeine', 'facts') },
       },
       {
+        id: 'formula',
+        icon: <I.Atom size={18} />,
+        title: 'Type a formula to see every isomer',
+        what: 'Type a molecular formula like C5H10 and Orbital works out every way those atoms can be joined up — from the bonding rules, not from a list of molecules someone published. Each one is drawn and named for you.',
+        steps: [
+          <>Type the formula in the search box (capital letters for elements: <span className="mono">C5H10</span>, <span className="mono">C4H10O</span>).</>,
+          'Tap any isomer to open it in 3D and name it, then come back to the list.',
+        ],
+        tip: 'These are constitutional isomers — different connections. Cis/trans and R/S versions of one skeleton aren’t listed separately; open one and use Projections for those.',
+        tryIt: { label: 'Isomers of C5H10', run: async () => { const { openIsomers } = await import('@/lib/isomers'); await openIsomers({ C: 5, H: 10 }, 'C5H10'); } },
+      },
+      {
         id: 'build',
         icon: <I.Cube size={18} />,
         title: 'Build it in 3D',
@@ -108,7 +120,8 @@ const CHAPTERS: Chapter[] = [
         steps: [
           <>Switch to <B icon={<I.Pen size={12} />}>2D</B> at the top.</>,
           'Click to place an atom. Drag from an atom to draw a bond. Click a bond to make it double, then triple.',
-          <>Press <K>R</K> for ring templates, and <K>W</K> or <K>D</K> for wedge and dash bonds.</>,
+          <>The hexagon button (or <K>R</K>) draws rings — click it to choose the size, from 3 up to 8 and benzene, or press <K>3</K>–<K>8</K>. Click empty space to drop one, an atom to hang it off, or a bond to fuse it.</>,
+          <><K>W</K> and <K>D</K> draw wedge and dash bonds.</>,
         ],
         tip: <><B icon={<I.Split size={12} />}>Split</B> shows 2D and 3D side by side. Select an atom in one and it lights up in the other.</>,
         tryIt: { label: 'Open the 2D drawing board', run: () => useStudio.setState({ view: '2d', tool2d: 'draw', landing: false }) },

@@ -9,7 +9,7 @@ export type ViewMode = '2d' | '3d' | 'split';
 export type Mode3D = 'build' | 'conformer' | 'measure';
 export type RenderStyle = 'kit' | 'licorice' | 'spacefill' | 'geometry' | 'stereo';
 export type Tool2D = 'select' | 'draw' | 'chain' | 'ring' | 'erase' | 'charge+' | 'charge-' | 'wedge' | 'hash' | 'wavy';
-export type SidePanel = 'facts' | 'explain' | 'practice' | 'tutor' | 'projection' | 'orbitals' | 'mechanism' | 'room' | 'library' | 'settings' | 'resonance';
+export type SidePanel = 'facts' | 'explain' | 'practice' | 'tutor' | 'projection' | 'orbitals' | 'mechanism' | 'room' | 'library' | 'settings' | 'resonance' | 'isomers';
 export type GeometryStatus = 'none' | 'idealized' | 'relaxing' | 'relaxed' | 'failed';
 
 export interface Settings {

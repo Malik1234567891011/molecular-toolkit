@@ -20,3 +20,4 @@ export * from './kekule.ts';
 export * from './chair.ts';
 export * from './acidity.ts';
 export * from './resonance.ts';
+export * from './isomers.ts';

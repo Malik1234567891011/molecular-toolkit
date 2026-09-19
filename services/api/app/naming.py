@@ -108,6 +108,63 @@ REPAIRS: list[tuple[str, str]] = [
 ]
 
 
+# Pieces OPSIN understands, long enough that a fuzzy match means something. A typo anywhere in a
+# systematic name is usually one of these spelled wrong ("fluro" for "fluoro"), so the piece is
+# swapped for its nearest neighbour and the whole name is offered back to the parser.
+MORPHEMES = """
+fluoro chloro bromo iodo hydroxy oxo amino nitro cyano nitroso azido isocyanato
+methyl ethyl propyl butyl pentyl hexyl heptyl octyl nonyl decyl
+isopropyl isobutyl sec-butyl tert-butyl neopentyl cyclopropyl cyclobutyl cyclopentyl cyclohexyl
+phenyl benzyl vinyl allyl ethenyl ethynyl methylidene
+methoxy ethoxy propoxy butoxy phenoxy formyl acetyl benzoyl carboxy carbamoyl
+sulfanyl sulfonyl mercapto trifluoromethyl
+tetra penta hexa hepta octa nona deca
+meth eth prop pent hex hept oct undec dodec cyclo
+ane ene yne anol enol amine amide nitrile carbaldehyde carboxylic
+benzene phenol aniline toluene styrene pyridine furan thiophene pyrrole imidazole naphthalene
+methane ethane propane butane pentane hexane heptane octane nonane decane
+methanol ethanol propanol butanol pentanol hexanol
+ethene propene butene pentene hexene ethyne propyne butyne
+cyclopropane cyclobutane cyclopentane cyclohexane cycloheptane cyclooctane cyclohexene cyclopentene
+acid acetate benzoate ketone aldehyde ether ester
+""".split()
+
+
+def _morpheme_repairs(q: str, focus: str | None = None, limit: int = 24) -> list[str]:
+    """Names rebuilt by fixing one mis-spelled piece. When the parser says which section it
+    choked on, only that part of the name is touched; otherwise every place a part could start
+    is tried, skipping the ones that are already spelled correctly."""
+    s = q.lower()
+    window: range | None = None
+    if focus:
+        at = s.find(focus.lower().strip())
+        if at >= 0:
+            window = range(at, at + len(focus) + 3)
+    scored: dict[str, tuple[int, int]] = {}
+    for i, ch in enumerate(s):
+        if not ch.isalpha() or (i and s[i - 1].isalpha()):
+            continue  # a part starts at the beginning, or after a locant, hyphen or bracket
+        if window is not None and i not in window:
+            continue
+        if window is None and any(s.startswith(m, i) for m in MORPHEMES if len(m) >= 5):
+            continue  # already a name part: nothing to fix here
+        for m in MORPHEMES:
+            if len(m) < 4:
+                continue
+            allowed = min(2, len(m) // 3)
+            for length in range(max(3, len(m) - 2), len(m) + 3):
+                piece = s[i : i + length]
+                if len(piece) < 3 or piece == m:
+                    continue
+                d = _edit_distance(piece, m)
+                if d and d <= allowed:
+                    fixed = s[:i] + m + s[i + length :]
+                    rank = (d, -len(m))
+                    if fixed != s and (fixed not in scored or rank < scored[fixed]):
+                        scored[fixed] = rank
+    return [name for name, _ in sorted(scored.items(), key=lambda kv: kv[1])[:limit]]
+
+
 def repair_candidates(q: str) -> list[str]:
     out: list[str] = []
     s = q.lower()
@@ -228,7 +285,13 @@ async def resolve(query: str) -> dict[str, Any]:
     merged = _merge(cands)
     suggestions: list[dict[str, str]] = []
     if not merged and "name" in kinds:
-        for v in repair_candidates(normalized)[:12]:
+        # OPSIN names the section it could not read ("… section of the name: 3-fluro"): repair
+        # that part rather than guessing at the whole name.
+        stuck = None
+        if opsin_info and opsin_info.get("message"):
+            m = re.search(r"section of the name:\s*(.+?)(?:\s\s|\n|$)", opsin_info["message"])
+            stuck = m.group(1).strip() if m else None
+        for v in repair_candidates(normalized)[:12] + _morpheme_repairs(normalized, stuck):
             r = await opsin.parse(v)
             if r.ok and v not in [s["name"] for s in suggestions]:
                 suggestions.append({"name": v, "source": "spelling"})

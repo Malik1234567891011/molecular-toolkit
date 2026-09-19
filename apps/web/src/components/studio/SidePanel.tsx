@@ -14,11 +14,13 @@ const OrbitalsPanel = dynamic(() => import('../panels/OrbitalsPanel').then((m) =
 const MechanismPanel = dynamic(() => import('../panels/MechanismPanel').then((m) => m.MechanismPanel), { ssr: false });
 const RoomPanel = dynamic(() => import('../panels/RoomPanel').then((m) => m.RoomPanel), { ssr: false });
 const ResonancePanel = dynamic(() => import('../panels/ResonancePanel').then((m) => m.ResonancePanel), { ssr: false });
+const IsomersPanel = dynamic(() => import('../panels/IsomersPanel').then((m) => m.IsomersPanel), { ssr: false });
 const LibraryPanel = dynamic(() => import('../panels/LibraryPanel').then((m) => m.LibraryPanel), { ssr: false });
 
 export const TITLES: Record<string, string> = {
   facts: 'Inspector', explain: 'Explain the name', practice: 'Practice', tutor: 'Ask this molecule', projection: 'Projection lab',
   settings: 'Settings', orbitals: 'Orbitals & ESP', mechanism: 'Mechanisms', room: 'Study room', library: 'Library', resonance: 'Resonance',
+  isomers: 'Isomers of a formula',
 };
 
 export function SidePanel() {
@@ -62,6 +64,8 @@ export function PanelBody({ panel }: { panel: string }) {
       return <RoomPanel />;
     case 'library':
       return <LibraryPanel />;
+    case 'isomers':
+      return <IsomersPanel />;
     case 'resonance':
       return <ResonancePanel />;
     default:

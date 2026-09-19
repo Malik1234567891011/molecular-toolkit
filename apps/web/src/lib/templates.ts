@@ -90,6 +90,7 @@ export const RING_BUTTONS: RingButton[] = [
   { size: 3, aromatic: false, label: 'cyclopropane' },
   { size: 4, aromatic: false, label: 'cyclobutane' },
   { size: 7, aromatic: false, label: 'cycloheptane' },
+  { size: 8, aromatic: false, label: 'cyclooctane' },
 ];
 
 export const FRAGMENTS: Array<{ label: string; smiles: string; hint: string }> = [

@@ -28,7 +28,6 @@ const TOOLS: Array<{ tool: Tool2D; title: string; icon: React.ReactNode; key?: s
   { tool: 'select', title: 'Select / move (V)', icon: <I.Pointer size={17} />, key: 'V' },
   { tool: 'draw', title: 'Draw atoms and bonds (B)', icon: <I.Pen size={17} />, key: 'B' },
   { tool: 'chain', title: 'Chain — drag to draw a zig-zag carbon chain', icon: <I.Chain size={18} /> },
-  { tool: 'ring', title: 'Ring templates (R)', icon: <I.Hexagon size={18} />, key: 'R' },
   { tool: 'erase', title: 'Erase', icon: <I.Eraser size={17} /> },
   { tool: 'charge+', title: 'Increase charge', icon: <span className="text-[15px]">⊕</span> },
   { tool: 'charge-', title: 'Decrease charge', icon: <span className="text-[15px]">⊖</span> },
@@ -80,6 +79,21 @@ export function ElementRail({ dock = false }: { dock?: boolean }) {
               {t.icon}
             </RailButton>
           ))}
+          {/* The ring tool carries its size, and opens the size list: one hexagon, not two. */}
+          <RailButton
+            active={tool === 'ring'}
+            onClick={() => {
+              useStudio.setState({ tool2d: 'ring' });
+              setSection(section === 'rings' ? null : 'rings');
+            }}
+            title={`Rings (R) — currently ${ringAromatic ? 'benzene' : `${ringSize}-membered`}. Click to choose another size.`}
+            testid="tool-ring"
+          >
+            <span className="relative grid place-items-center">
+              <I.Hexagon size={20} />
+              <span className="absolute text-[10px] font-semibold">{ringAromatic ? '⌬' : ringSize}</span>
+            </span>
+          </RailButton>
           <div className={dock ? "mx-1 h-7 w-px shrink-0 bg-border" : "my-1 h-px w-8 bg-border"} />
         </>
       )}
@@ -92,8 +106,11 @@ export function ElementRail({ dock = false }: { dock?: boolean }) {
         <I.Grid size={16} />
       </RailButton>
       <div className={dock ? "mx-1 h-7 w-px shrink-0 bg-border" : "my-1 h-px w-8 bg-border"} />
-      <RailButton active={section === 'rings'} onClick={() => setSection(section === 'rings' ? null : 'rings')} title="Rings" testid="rail-rings">
-        <I.Hexagon size={18} />
+      <RailButton active={section === 'rings'} onClick={() => setSection(section === 'rings' ? null : 'rings')} title="Rings — choose a size, or attach one to the selected atom" testid="rail-rings">
+        <span className="relative grid place-items-center">
+          <I.Hexagon size={18} />
+          <span className="absolute text-[9.5px] font-semibold">{ringAromatic ? '⌬' : ringSize}</span>
+        </span>
       </RailButton>
       <RailButton active={section === 'groups'} onClick={() => setSection(section === 'groups' ? null : 'groups')} title="Common groups (attach to the selected atom)" testid="rail-groups">
         <span className="text-[11px]">R–</span>
@@ -104,10 +121,10 @@ export function ElementRail({ dock = false }: { dock?: boolean }) {
             <div className="grid grid-cols-2 gap-1">
               {RING_BUTTONS.map((r) => (
                 <button key={r.label} onClick={() => ring(r.size, r.aromatic)} className={`rounded-lg border px-2 py-1.5 text-left text-[12px] hover:border-accent ${ringSize === r.size && ringAromatic === r.aromatic ? 'border-accent bg-accent-soft' : 'border-border bg-panel-raised'}`}>
-                  {r.label}
+                  <span className="mono mr-1 text-text-3">{r.aromatic ? '⌬' : r.size}</span>{r.label}
                 </button>
               ))}
-              <p className="col-span-2 mt-1 text-[11px] leading-snug text-text-3">2D: click empty space, an atom (attach), a bond (fuse), or ⇧-click an atom (spiro).</p>
+              <p className="col-span-2 mt-1 text-[11px] leading-snug text-text-3">Keys <b className="mono">3</b>–<b className="mono">8</b> pick the size while the ring tool is on. 2D: click empty space, an atom (attach), a bond (fuse), or ⇧-click an atom (spiro).</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-1">

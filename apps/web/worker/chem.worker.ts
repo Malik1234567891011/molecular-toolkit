@@ -10,7 +10,7 @@ import { isosurface, type Grid } from './isosurface';
 import {
   computeFormula, detectFunctionalGroups, summarizeGroups, validateDocument, perceiveStereo, stereoMismatches, writeSmiles, writeMolfileV2000,
   parseMolfile, parseSmiles, MolView, localGeometry, placeHydrogens, rotateFragment, sideOfBond, alignTo, wedgesFromStereo,
-  naming, type MoleculeDocument, type Vec3, type Conformer, type Vec2,
+  naming, enumerateIsomers, type MoleculeDocument, type Vec3, type Conformer, type Vec2,
 } from '@orbital/chem';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -115,6 +115,31 @@ function layout2d(doc: MoleculeDocument): { layout: Record<string, Vec2>; doc: M
   });
   const next = wedgesFromStereo({ ...doc, layout2d: layout });
   return { layout, doc: next };
+}
+
+/**
+ * Constitutional isomers of a formula, ready to show: laid out, drawn, and named by the course
+ * engine. `offset`/`count` page through them so a formula with hundreds doesn't block the UI.
+ */
+function isomers(counts: Record<string, number>, profileId: string, offset: number, count: number, dark: boolean) {
+  const found = enumerateIsomers(counts, { limit: 400 });
+  const page = found.isomers.slice(offset, offset + count).map((doc) => {
+    let laid = doc;
+    try {
+      const r = layout2d(doc);
+      laid = { ...r.doc, layout2d: r.layout };
+    } catch {
+      /* drawn from whatever coordinates we have */
+    }
+    let name: string | null = null;
+    try {
+      name = analyze(laid, profileId).naming?.name ?? null;
+    } catch {
+      /* unnamed: the card falls back to the formula */
+    }
+    return { doc: laid, svg: svg(laid, 220, 150, undefined, dark), name };
+  });
+  return { page, total: found.total, truncated: found.truncated, note: found.note };
 }
 
 function svg(doc: MoleculeDocument, width: number, height: number, highlight?: string[], dark?: boolean) {
@@ -398,6 +423,9 @@ self.onmessage = async (ev: MessageEvent<Req>) => {
         break;
       case 'svg':
         result = svg(args.doc as MoleculeDocument, (args.width as number) ?? 240, (args.height as number) ?? 180, args.highlight as string[] | undefined, args.dark as boolean);
+        break;
+      case 'isomers':
+        result = isomers(args.counts as Record<string, number>, args.profileId as string, (args.offset as number) ?? 0, (args.count as number) ?? 24, args.dark as boolean);
         break;
       case 'relax':
         result = relax(args.doc as MoleculeDocument, args.coords as Record<string, Vec3>, (args.maxIts as number) ?? 600);

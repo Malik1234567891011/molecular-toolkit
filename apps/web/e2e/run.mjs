@@ -215,6 +215,66 @@ test('mobile: dock and three-height sheet, no sideways scroll', async (page) => 
   await waitState(page, () => document.querySelector('[data-testid=bottom-sheet]')?.getAttribute('data-snap') === 'half');
 });
 
+test('formula: C5H10 from the start screen lists all ten isomers', async (page) => {
+  await openStudio(page);
+  await page.click('[data-testid=search-input]');
+  await page.fill('[data-testid=search-input]', 'C5H10');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-testid=isomers-panel]', { timeout: 30000 });
+  await page.waitForSelector('text=/10 constitutional isomers/');
+  const cards = page.locator('[data-testid^=isomer-]');
+  assert((await cards.count()) === 10, `showed ${await cards.count()} of 10 isomers`);
+  // The start screen used to cover search results: an actual click proves they are reachable.
+  await cards.nth(1).click({ timeout: 5000 });
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length === 5 && !window.__orbital.getState().landing);
+  await waitState(page, () => {
+    const c = window.__orbital.getState().analysis?.formula?.counts;
+    return c?.C === 5 && c?.H === 10;
+  });
+});
+
+test('formula: an isomer list still appears with the naming service unreachable', async (page) => {
+  await openStudio(page);
+  await page.route('**/api/v1/names/resolve', (route) => route.abort());
+  await page.click('[data-testid=search-input]');
+  await page.fill('[data-testid=search-input]', 'C4H10');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-testid=isomers-panel]', { timeout: 30000 });
+  await page.waitForSelector('text=/2 constitutional isomers/');
+});
+
+test('name typos: a misspelled systematic name suggests the right one', async (page) => {
+  await openStudio(page);
+  await page.click('[data-testid=search-input]');
+  await page.fill('[data-testid=search-input]', '1-bromo-1-chloro-3-flurocyclopentane');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('text=/Did you mean/', { timeout: 30000 });
+  await page.click('text=1-bromo-1-chloro-3-fluorocyclopentane');
+  await waitState(page, () => {
+    const c = window.__orbital.getState().analysis?.formula?.counts;
+    return c?.C === 5 && c?.Br === 1 && c?.Cl === 1 && c?.F === 1;
+  });
+});
+
+test('rings: the ring tool offers other sizes, and digits set them', async (page) => {
+  await openStudio(page);
+  await page.evaluate(() => window.__orbital.setState({ landing: false, view: '2d', tool2d: 'draw' }));
+  await page.click('[data-testid=tool-ring]');
+  // The same button that arms the tool offers the sizes.
+  await page.waitForSelector('text=cyclopentane');
+  await page.click('text=cyclopentane');
+  await waitState(page, () => window.__orbital.getState().ringSize === 5);
+  // On an empty canvas the chosen ring is placed straight away.
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length === 5);
+  await waitState(page, () => window.__orbital.getState().analysis?.formula?.counts?.C === 5);
+  // A digit picks the size directly while the ring tool is on.
+  await page.keyboard.press('3');
+  await waitState(page, () => window.__orbital.getState().ringSize === 3);
+  const box = await page.locator('[data-testid=canvas-2d]').boundingBox();
+  await page.mouse.click(box.x + box.width * 0.75, box.y + box.height * 0.25);
+  await waitState(page, () => window.__orbital.getState().doc.atoms.length === 8); // 5-ring + 3-ring
+});
+
 test('guide: opens from the start screen, every Try it does its thing', async (page) => {
   await openStudio(page);
   await page.click('[data-testid=open-guide]');
