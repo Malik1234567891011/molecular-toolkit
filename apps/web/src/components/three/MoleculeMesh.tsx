@@ -259,13 +259,37 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
           off = new THREE.Vector3().crossVectors(n, dir).normalize();
         }
         const spacing = lanes === 2 ? 0.18 : 0.21;
-        const laneOffset = lanes === 1 ? 0 : (inst.lane - (lanes - 1) / 2) * spacing;
-        const r = lanes > 1 ? radius * 0.62 : radius;
-        const start = pa.clone().addScaledVector(off, laneOffset);
-        const end = pb.clone().addScaledVector(off, laneOffset);
+        let laneOffset = lanes === 1 ? 0 : (inst.lane - (lanes - 1) / 2) * spacing;
+        let r = lanes > 1 ? radius * 0.62 : radius;
+        let inset = 0;
+        let gap = 0;
+        if (b.aromatic && lanes === 2 && b.ring) {
+          // Aromatic: the σ bond on the axis, a thinner dashed line inside the ring, so every
+          // ring bond looks the same (spec §8 "aromatic rings perceived and rendered").
+          const centre = new THREE.Vector3();
+          let n = 0;
+          for (const k of b.ring) {
+            const p = displayPositions.get(k);
+            if (p) {
+              centre.add(p);
+              n++;
+            }
+          }
+          if (n) {
+            centre.multiplyScalar(1 / n);
+            const toCentre = centre.sub(pa.clone().lerp(pb, 0.5));
+            off = toCentre.addScaledVector(dir, -toCentre.dot(dir)).normalize();
+          }
+          laneOffset = inst.lane === 0 ? 0 : 0.2;
+          r = inst.lane === 0 ? radius : radius * 0.42;
+          inset = inst.lane === 0 ? 0 : 0.2 * len;
+          gap = inst.lane === 0 ? 0 : 0.07 * len;
+        }
+        const start = pa.clone().addScaledVector(off, laneOffset).addScaledVector(dir, inset);
+        const end = pb.clone().addScaledVector(off, laneOffset).addScaledVector(dir, -inset);
         const mid = start.clone().lerp(end, 0.5);
-        const s = inst.half === 0 ? start : mid;
-        const e = inst.half === 0 ? mid : end;
+        const s = inst.half === 0 ? start : mid.clone().addScaledVector(dir, gap);
+        const e = inst.half === 0 ? mid.clone().addScaledVector(dir, -gap) : end;
         const center = s.clone().lerp(e, 0.5);
         tmpQ.setFromUnitVectors(UP, dir);
         tmpS.set(r, s.distanceTo(e) * (len > 0 ? 1 : 0), r);

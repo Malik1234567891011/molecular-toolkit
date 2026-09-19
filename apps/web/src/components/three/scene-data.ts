@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MolView, type AtomId, type MoleculeDocument, type Vec3 } from '@orbital/chem';
+import { MolView, perceiveRings, type AtomId, type MoleculeDocument, type Vec3 } from '@orbital/chem';
 import { element } from '@orbital/chem';
 import type { RenderStyle } from '@/lib/store';
 
@@ -19,6 +19,9 @@ export interface RBond {
   bondId?: string;
   /** Neighbour key used to orient multiple-bond offsets. */
   planeRef?: string;
+  /** Aromatic ring bond: drawn as one full bond plus a dashed inner line toward `ring`'s centre. */
+  aromatic?: boolean;
+  ring?: string[];
 }
 
 const KIT_RADIUS: Record<string, number> = { H: 0.2, C: 0.32, N: 0.31, O: 0.3, F: 0.27, Cl: 0.36, Br: 0.4, I: 0.45, S: 0.38, P: 0.38 };
@@ -50,9 +53,18 @@ export function buildScene(doc: MoleculeDocument, style: RenderStyle, showH: boo
       }
     }
   });
+  const rings = doc.bonds.some((b) => b.aromatic) ? perceiveRings(view).rings : [];
   for (const b of doc.bonds) {
     const i = view.idx(b.a1);
     const j = view.idx(b.a2);
+    if (b.aromatic) {
+      // The smallest ring containing the bond decides which side the inner line goes.
+      const ring = rings.filter((r) => r.atoms.includes(i) && r.atoms.includes(j)).sort((x, y) => x.atoms.length - y.atoms.length)[0];
+      if (ring) {
+        bonds.push({ key: b.id, a: b.a1, b: b.a2, order: 2, bondId: b.id, aromatic: true, ring: ring.atoms.map((k) => doc.atoms[k].id) });
+        continue;
+      }
+    }
     let planeRef: string | undefined;
     if (b.order > 1) {
       const nb = view.nbrs[i].find((x) => x !== j) ?? view.nbrs[j].find((x) => x !== i);
