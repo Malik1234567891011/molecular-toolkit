@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { naming } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
 import { subColor } from '@/lib/colors';
@@ -97,6 +97,15 @@ export function NameBar() {
   const verification = useStudio((s) => s.verification);
   const doc = useStudio((s) => s.doc);
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key); };
+  }, [open]);
   const hidden = usePracticeHidesName();
   if (!doc.atoms.length) return <span className="text-sm text-text-3">No molecule yet</span>;
   if (hidden) {
@@ -119,7 +128,7 @@ export function NameBar() {
   const useTokens = primary && n?.name && primary.name === n.name && n.tokens;
   const provenance = primary?.provenance ?? (verification?.status === 'pending' ? 'pending' : n?.ok ? 'pending' : 'unsupported');
   return (
-    <div className="relative flex min-w-0 items-center gap-2">
+    <div ref={root} className="relative flex min-w-0 items-center gap-2">
       <div className="min-w-0 truncate" data-testid="current-name" aria-live="polite">
         {useTokens ? (
           <NameTokens tokens={n!.tokens!} />
@@ -148,11 +157,11 @@ export function NameBar() {
           <ul className="space-y-1.5">
             {verification.accepted.map((c) => (
               <li key={c.name} className="flex items-start justify-between gap-3">
-                <span className="nomen">{c.name}</span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  {c.note && <span className="text-[11px] text-text-3">{c.note}</span>}
-                  <ProvenanceBadge p={c.provenance} compact />
-                </span>
+                <div className="min-w-0">
+                  <div className="nomen break-words">{c.name}</div>
+                  {c.note && <div className="text-[11px] leading-snug text-text-3">{c.note}</div>}
+                </div>
+                <span className="shrink-0 pt-0.5"><ProvenanceBadge p={c.provenance} compact /></span>
               </li>
             ))}
           </ul>

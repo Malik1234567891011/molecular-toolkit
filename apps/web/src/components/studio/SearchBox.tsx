@@ -108,13 +108,16 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
               input.current?.blur();
             }
           }}
-          placeholder={big ? 'Type a name, formula, SMILES, CAS or CID…' : 'Find a molecule  (⌘K for commands)'}
+          placeholder={big ? 'Type a name, formula, SMILES, CAS or CID…' : 'Find a molecule…'}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-3"
           aria-label="Find a molecule by name, formula, SMILES, InChI, CAS number or PubChem CID"
           spellCheck={false}
           autoComplete="off"
           data-testid="search-input"
         />
+        {!big && !value && !search.busy && (
+          <kbd className="mono hidden shrink-0 rounded border border-border px-1 text-[11px] text-text-3 lg:inline" title="Command palette">⌘K</kbd>
+        )}
         {search.busy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-label="Resolving" />}
         <button type="button" onClick={voice} className={`rounded-md p-1 ${listening ? 'text-danger' : 'text-text-3 hover:text-text'}`} aria-label="Speak a name" title="Speak a name or command">
           <I.Mic size={big ? 18 : 15} />

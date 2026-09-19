@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import {
-  CipRanker, MolView, acidSites, angleDeg, resonanceContributors, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
+  CipRanker, MolView, acidSites, angleDeg, dihedralDeg, resonanceContributors, element, explainAngle, isRotatable, perceiveRings, prettyFormula, v3,
   type AtomId, type BondId, type StereoNeighbour, type Vec3,
 } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
@@ -296,7 +296,7 @@ function AtomInspector({ id }: { id: AtomId }) {
           <div>
             <div className="text-[15px] font-semibold capitalize">{el.name}{atom.formalCharge ? ` (${atom.formalCharge > 0 ? '+' : ''}${atom.formalCharge})` : ''}</div>
             <div className="text-[12px] text-text-2">
-              {g?.hybridization} · {g?.molecularGeometry}
+              {g?.hybridization.replace('3', '³').replace('2', '²')} · {g?.molecularGeometry}
               {g?.lonePairs ? ` · ${g.lonePairs} lone pair${g.lonePairs > 1 ? 's' : ''}` : ''}
             </div>
           </div>
@@ -466,7 +466,7 @@ export function ConformerPanel() {
     <>
       <Section title="Newman projection" right={<span className="mono text-[12px] text-text-2">{dih !== null ? `${dih.toFixed(0)}°` : ''}</span>}>
         <div className="flex items-center gap-3">
-          <Newman bondId={bondId} size={150} />
+          <div className="shrink-0 px-2"><Newman bondId={bondId} size={150} /></div>
           <div className="text-[12.5px] leading-snug">
             <div className="font-semibold">{dih !== null ? conformationName(dih) : '—'}</div>
             <div className="mt-1 text-text-2">Front carbon: the dot. Back carbon: the circle.</div>
@@ -499,6 +499,108 @@ export function ConformerPanel() {
 
 // ---------------------------------------------------------------------------------------------
 
+// Typical bond lengths (Å) for course molecules, keyed by sorted element pair and bond order.
+const TYPICAL_LENGTH: Record<string, number> = {
+  'C-C-1': 1.54, 'C-C-2': 1.34, 'C-C-3': 1.2, 'C-C-1.5': 1.4, 'C-H-1': 1.09, 'C-N-1': 1.47, 'C-N-2': 1.28, 'C-N-3': 1.16,
+  'C-N-1.5': 1.34, 'C-O-1': 1.43, 'C-O-2': 1.21, 'H-O-1': 0.96, 'H-N-1': 1.01, 'C-F-1': 1.35, 'C-Cl-1': 1.77, 'Br-C-1': 1.94,
+  'C-I-1': 2.14, 'C-S-1': 1.82, 'C-S-2': 1.6, 'H-S-1': 1.34, 'N-N-1': 1.45, 'N-N-2': 1.25, 'O-O-1': 1.48, 'N-O-1': 1.4,
+  'N-O-2': 1.21, 'O-S-2': 1.43, 'O-P-2': 1.48, 'C-P-1': 1.84, 'O-P-1': 1.6,
+};
+
+function MeasureCard() {
+  const measure = useStudio((s) => s.measure);
+  const doc = useStudio((s) => s.doc);
+  const a = useStudio((s) => s.analysis);
+  const geometryState = useStudio((s) => s.geometry);
+  const view = useMemo(() => new MolView(doc), [doc]);
+  const c = coords();
+  const pts = measure.map((k) => c[k] as Vec3 | undefined);
+  const hint = <p className="text-[12.5px] text-text-2">Click 2 atoms for a distance, 3 for an angle, 4 for a dihedral. Click an atom again to drop it.</p>;
+  if (measure.length < 2 || pts.some((p) => !p)) return <Section title="Measure">{hint}</Section>;
+  const parent = (k: string) => k.split('.')[0];
+  const isH = (k: string) => k.includes('.h');
+  const label = (k: string) => (isH(k) ? 'H' : doc.atoms.find((x) => x.id === k)?.element ?? '?');
+  const bondOrder = (x: string, y: string): number | null => {
+    if (isH(x) && isH(y)) return null;
+    if (isH(x) || isH(y)) return parent(x) === parent(y) ? 1 : null;
+    const b = view.bondBetween(view.idx(x), view.idx(y));
+    return b < 0 ? null : view.bonds[b].order;
+  };
+  const path = measure.map(label).join('–');
+  const modelNote = geometryState === 'relaxed'
+    ? 'Optimized force-field model geometry, not an experimental measurement.'
+    : 'Quick local placement, not yet relaxed — press Relax for the force-field geometry.';
+  const P = pts as Vec3[];
+  let body: React.ReactNode = null;
+  if (measure.length === 2) {
+    const d = Math.hypot(P[0][0] - P[1][0], P[0][1] - P[1][1], P[0][2] - P[1][2]);
+    const order = bondOrder(measure[0], measure[1]);
+    const els = [label(measure[0]), label(measure[1])].sort().join('-');
+    const typical = order !== null ? TYPICAL_LENGTH[`${els}-${order}`] : undefined;
+    const kind = order === 1 ? 'single' : order === 2 ? 'double' : order === 3 ? 'triple' : 'aromatic';
+    body = (
+      <>
+        <Row k={`${path} distance`} v={`${d.toFixed(3)} Å`} mono />
+        {typical !== undefined && <Row k={`Typical ${kind} bond`} v={`${typical.toFixed(2)} Å`} mono />}
+        <p className="mt-2 text-[12px] leading-snug text-text-2">
+          {order === null
+            ? 'These atoms are not bonded to each other: this is a through-space distance.'
+            : typical !== undefined
+              ? Math.abs(d - typical) < 0.04
+                ? `A normal ${kind} bond length.`
+                : `${d > typical ? 'Longer' : 'Shorter'} than a typical ${kind} bond by ${Math.abs(d - typical).toFixed(2)} Å${order > 1 ? '' : ' — neighbouring groups, conjugation or ring strain stretch or squeeze it'}.`
+              : `A ${kind} bond.`}
+          {order !== null && order > 1 && ' More shared electron pairs pull the atoms closer: triple < double < single.'}
+        </p>
+      </>
+    );
+  } else if (measure.length === 3) {
+    const v = angleDeg(P[0], P[1], P[2]);
+    const mid = measure[1];
+    const bondedPath = bondOrder(measure[0], mid) !== null && bondOrder(mid, measure[2]) !== null && !isH(mid);
+    const g = bondedPath ? a?.geometry[mid] : undefined;
+    const ring = bondedPath ? perceiveRings(view).smallestRing(view.idx(mid)) : 0;
+    const why = bondedPath && g?.idealAngle ? explainAngle(doc, mid, v, ring).filter((w) => !w.startsWith('This is an optimized')) : [];
+    body = (
+      <>
+        <Row k={`${path} angle`} v={`${v.toFixed(1)}°`} mono />
+        {g?.idealAngle && <Row k={`Idealized (${g.hybridization.replace('3', '³').replace('2', '²')}, ${g.molecularGeometry})`} v={`${g.idealAngle}°`} mono />}
+        {g?.idealAngle && <Row k="Difference" v={`${(v - g.idealAngle >= 0 ? '+' : '−')}${Math.abs(v - g.idealAngle).toFixed(1)}°`} mono />}
+        {!bondedPath && <p className="mt-2 text-[12px] text-text-2">The middle atom is not bonded to both ends, so this is a through-space angle rather than a bond angle.</p>}
+        {why.length > 0 && (
+          <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12px] leading-snug text-text-2">
+            {why.map((w) => <li key={w}>{w}</li>)}
+          </ul>
+        )}
+      </>
+    );
+  } else {
+    const v = dihedralDeg(P[0], P[1], P[2], P[3]);
+    const chain = [0, 1, 2].every((k) => bondOrder(measure[k], measure[k + 1]) !== null);
+    const centre = chain && !isH(measure[1]) && !isH(measure[2]) ? view.bondBetween(view.idx(measure[1]), view.idx(measure[2])) : -1;
+    const rotatable = centre >= 0 && isRotatable(doc, view.bonds[centre].id);
+    body = (
+      <>
+        <Row k={`${path} dihedral`} v={`${v.toFixed(1)}°`} mono />
+        {chain && <Row k="Conformation" v={conformationName(v)} />}
+        <p className="mt-2 text-[12px] leading-snug text-text-2">
+          {!chain
+            ? 'These four atoms are not a bonded chain, so this is a torsion between arbitrary points.'
+            : rotatable
+              ? 'Switch to Conformer mode and drag the arc on the middle bond to change it live. Rotation changes the shape (conformer), never the molecule.'
+              : 'The middle bond cannot rotate freely (it is a multiple bond or in a ring), so this angle is fixed by the structure.'}
+        </p>
+      </>
+    );
+  }
+  return (
+    <Section title="Measurement" right={<button onClick={() => useStudio.setState({ measure: [] })} className="text-[11.5px] text-text-3 hover:text-text">Clear</button>}>
+      {body}
+      <p className="mt-2 text-[11.5px] text-text-3">{modelNote}</p>
+    </Section>
+  );
+}
+
 export function Inspector() {
   const selection = useStudio((s) => s.selection);
   const mode = useStudio((s) => s.mode3d);
@@ -509,6 +611,7 @@ export function Inspector() {
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-thin" data-testid="inspector">
       {invalid && <InvalidCard />}
       {mode === 'conformer' && <ConformerPanel />}
+      {mode === 'measure' && <MeasureCard />}
       {selection.atoms.length === 1 && <AtomInspector id={selection.atoms[0]} />}
       {selection.bonds.length === 1 && selection.atoms.length === 0 && mode !== 'conformer' && <BondInspector id={selection.bonds[0]} />}
       {selection.atoms.length > 1 && (

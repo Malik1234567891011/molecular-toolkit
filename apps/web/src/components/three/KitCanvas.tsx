@@ -161,6 +161,7 @@ function Scene() {
   const doc = useStudio((s) => s.doc);
   const reduced = useStudio((s) => s.settings.motion === 'reduced');
   const [interacting, setInteracting] = useState(false);
+  const [handleDrag, setHandleDrag] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dragPoint, setDragPoint] = useState<THREE.Vector3 | null>(null);
   const { camera, gl, size } = useThree();
@@ -291,7 +292,7 @@ function Scene() {
       <GeometryGuides />
       <Overlays />
       <OrbitalSurfaces />
-      {mode === 'conformer' && <RotationHandle onInteract={setInteracting} />}
+      {mode === 'conformer' && <RotationHandle onInteract={(v) => { setHandleDrag(v); setInteracting(v); }} />}
       {drag && dragPoint && <DragGhost from={drag.parent} to={dragPoint} />}
       {doc.atoms.length > 0 && <group userData={{ noExport: true }}><ContactShadows position={[0, bottom, 0]} opacity={theme === 'dark' ? 0.55 : 0.32} scale={30} blur={2.8} far={14} resolution={512} color={theme === 'dark' ? '#000000' : '#3a3550'} frames={reduced ? 1 : Infinity} /></group>}
       <OrbitControls
@@ -299,7 +300,7 @@ function Scene() {
         enableDamping
         dampingFactor={0.12}
         rotateSpeed={0.85}
-        enabled={!drag}
+        enabled={!drag && !handleDrag}
         onStart={() => setInteracting(true)}
         onEnd={() => setInteracting(false)}
         minDistance={2}

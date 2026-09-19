@@ -9,7 +9,7 @@
   --panel: rgba(17, 21, 30, 0.78);
   --panel-solid: #11151e;
   --panel-raised: #171c28;
-  --glass: rgba(20, 24, 34, 0.62);
+  --glass: rgba(20, 24, 34, 0.84);
   --border: rgba(255, 255, 255, 0.075);
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #e7e9ef;
@@ -43,7 +43,7 @@
   --panel: rgba(255, 255, 255, 0.82);
   --panel-solid: #ffffff;
   --panel-raised: #fbfaf7;
-  --glass: rgba(255, 255, 255, 0.7);
+  --glass: rgba(255, 255, 255, 0.86);
   --border: rgba(20, 20, 35, 0.09);
   --border-strong: rgba(20, 20, 35, 0.16);
   --text: #16181d;
@@ -78,7 +78,7 @@
     --panel: rgba(255, 255, 255, 0.82);
     --panel-solid: #ffffff;
     --panel-raised: #fbfaf7;
-    --glass: rgba(255, 255, 255, 0.7);
+    --glass: rgba(255, 255, 255, 0.86);
     --border: rgba(20, 20, 35, 0.09);
     --border-strong: rgba(20, 20, 35, 0.16);
     --text: #16181d;
