@@ -403,7 +403,9 @@ export default function KitCanvas() {
             let timer: ReturnType<typeof setTimeout> | undefined;
             gl.domElement.addEventListener('webglcontextlost', (ev) => {
               ev.preventDefault();
-              timer = setTimeout(() => setLost(true), 1200);
+              // R3F disposes an unmounting canvas with forceContextLoss(), which fires this same
+              // event: only a canvas still on the page has really lost its context.
+              timer = setTimeout(() => { if (gl.domElement.isConnected) setLost(true); }, 1200);
             });
             gl.domElement.addEventListener('webglcontextrestored', () => clearTimeout(timer));
           }}

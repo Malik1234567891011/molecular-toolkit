@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { naming } from '@orbital/chem';
 import { useStudio, studio } from '@/lib/store';
 import {
-  ACHIEVEMENTS, CONCEPTS, TYPE_LABEL, checkAnswer, clearPracticeHighlights, encodeSet, exportAnki, loadProgress, nextConcept, nextHint,
+  ACHIEVEMENTS, CONCEPTS, TYPE_LABEL, answerRevealed, checkAnswer, clearPracticeHighlights, encodeSet, exportAnki, loadProgress, nextConcept, nextHint,
   saveSet, startDaily, startProblem, startSetItem, streakOf, today, usePractice, type Problem, type ProblemType,
 } from '@/lib/practice';
 import { I } from '../ui/icons';
@@ -317,7 +317,7 @@ function ProblemCard({ problem }: { problem: Problem }) {
 function reveal(p: Problem) {
   const answer =
     p.type === 'name' ? p.trace?.name : p.type === 'build' ? p.targetName : p.choices ? p.answer?.map((a) => p.choices!.find((c) => c.id === a)?.label ?? a).join(', ') : p.type === 'acidity' ? [...(p.acidity ?? [])].sort((a, b) => a.pKa - b.pKa).map((x) => x.name).join(' > ') : undefined;
-  return { verdict: 'wrong' as const, title: 'Answer shown', detail: answer ? [`Answer: ${answer}`] : ['See the highlighted atoms on the model.'], reveal: p.type === 'name' ? p.trace?.name : undefined };
+  return { verdict: 'wrong' as const, shown: true, title: 'Answer shown', detail: answer ? [`Answer: ${answer}`] : ['See the highlighted atoms on the model.'], reveal: p.type === 'name' ? p.trace?.name : undefined };
 }
 
 function Choices({ problem, disabled }: { problem: Problem; disabled: boolean }) {
@@ -419,7 +419,8 @@ function FeedbackCard({ problem }: { problem: Problem }) {
       useStudio.setState((st) => ({ highlights: { ...st.highlights, 'practice:answer': { id: 'practice:answer', atoms: t.parent.atomIds, bonds: st.doc.bonds.filter((b) => set.has(b.a1) && set.has(b.a2)).map((b) => b.id), tone: 'good', labels: t.numbering.locantOf } } }));
     }
   }, [fb, problem]);
-  const retry = fb.verdict === 'invalid' || fb.verdict === 'offline' || ((fb.verdict === 'almost' || fb.verdict === 'wrong') && (problem.type === 'build' || problem.type === 'repair' || problem.type === 'parent' || problem.type === 'number'));
+  const revealed = usePractice(answerRevealed);
+  const retry = fb.verdict === 'invalid' || fb.verdict === 'offline' || ((fb.verdict === 'almost' || fb.verdict === 'wrong') && (problem.type === 'build' || problem.type === 'repair' || problem.type === 'parent' || problem.type === 'number' || (problem.type === 'name' && !revealed)));
   return (
     <div className={`fade-up space-y-2 rounded-xl border p-3 ${cls}`} data-testid="feedback" data-verdict={fb.verdict}>
       <div className="flex items-start gap-2">
@@ -443,14 +444,17 @@ function FeedbackCard({ problem }: { problem: Problem }) {
           </figure>
         </div>
       )}
-      {fb.reveal && fb.verdict !== 'correct' && (
+      {fb.reveal && fb.verdict !== 'correct' && revealed && (
         <div className="rounded-lg bg-panel px-2.5 py-1.5 text-[12.5px]">
           Accepted name: <span className="nomen font-semibold">{fb.reveal}</span>
         </div>
       )}
       <div className="flex flex-wrap gap-1.5">
         {retry && (
-          <button onClick={() => usePractice.setState({ feedback: null })} className="rounded-md border border-border bg-panel px-2 py-1 text-[12px] hover:border-accent">Try again</button>
+          <button onClick={() => usePractice.setState({ feedback: null })} className="rounded-md border border-border bg-panel px-2 py-1 text-[12px] hover:border-accent" data-testid="try-again">Try again</button>
+        )}
+        {problem.type === 'name' && !revealed && fb.verdict !== 'invalid' && fb.verdict !== 'offline' && (
+          <button onClick={() => usePractice.setState({ feedback: { ...fb, shown: true } })} className="rounded-md border border-border bg-panel px-2 py-1 text-[12px] hover:border-accent">Show the answer</button>
         )}
         {problem.trace && fb.verdict !== 'invalid' && (
           <button onClick={() => { usePractice.setState({ problem: null, feedback: null }); clearPracticeHighlights(); useStudio.setState({ panel: 'explain', explainStep: stepFor(fb.concept) }); }} className="rounded-md border border-border bg-panel px-2 py-1 text-[12px] hover:border-accent">

@@ -91,6 +91,8 @@ export interface Problem {
 
 export interface Feedback {
   verdict: 'correct' | 'almost' | 'wrong' | 'invalid' | 'offline';
+  /** The student asked to see the answer. */
+  shown?: boolean;
   title: string;
   detail: string[];
   concept?: Concept;
@@ -227,6 +229,9 @@ export interface PracticeState {
   checking: boolean;
   order: string[];
   picked: string[];
+  /** Checks made on the current problem (a name problem allows a second try before revealing). */
+  tries: number;
+  triesFor: Problem | null;
   set: (p: Partial<PracticeState>) => void;
 }
 
@@ -241,6 +246,8 @@ export const usePractice = create<PracticeState>((set) => ({
   checking: false,
   order: [],
   picked: [],
+  tries: 0,
+  triesFor: null,
   set: (p) => set(p),
 }));
 const practice = () => usePractice.getState();
@@ -680,7 +687,7 @@ export async function checkAnswer(input?: string): Promise<void> {
   const s = practice();
   const p = s.problem;
   if (!p || s.checking) return;
-  usePractice.setState({ checking: true });
+  usePractice.setState({ checking: true, tries: (s.triesFor === p ? s.tries : 0) + 1, triesFor: p });
   let fb: Feedback;
   try {
     fb = await grade(p, input ?? '', s);
@@ -1084,6 +1091,11 @@ function diagnoseSameMolecule(answer: string, t: naming.NamingTrace): Feedback {
   if (pa.length > 1 && pa.join('|') !== po.join('|') && [...pa].sort().join('|') === [...po].sort().join('|')) {
     return { verdict: 'almost', title: 'Right molecule and locants — but prefixes go in alphabetical order.', detail: [`Cite them as: ${po.join(', ')}. Multiplying prefixes (di-, tri-) and sec-/tert- are ignored when alphabetizing; iso- and cyclo- count.`], concept: 'alphabetization', reveal: ours };
   }
+  const hy = new RegExp(`([a-z])-(${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`).exec(normalizeName(answer).replace(STEREO_PREFIX, ''));
+  if (hy) {
+    const fixed = normalizeName(answer).replace(hy[0], `${hy[1]}${hy[2]}`);
+    return { verdict: 'almost', title: 'Right molecule — but no hyphen before the parent name.', detail: [`A prefix ending in a letter joins the parent directly: write ${fixed}. Hyphens only separate numbers from letters.`], concept: 'alphabetization', reveal: ours };
+  }
   return { verdict: 'almost', title: 'Right molecule — but not in standard form.', detail: ['Check punctuation (hyphens between numbers and letters, commas between numbers), spacing, and whether the stereodescriptor or a locant is missing.'], concept: 'locants', reveal: ours };
 }
 
@@ -1195,6 +1207,15 @@ export async function startSetItem(item: string): Promise<void> {
 }
 
 /** While a naming problem is open the answer must not be on screen (name bar, explain trigger). */
+/** The answer is on show once it is right, given up on, or missed twice. */
+export function answerRevealed(s: PracticeState): boolean {
+  const fb = s.feedback;
+  if (!fb) return false;
+  if (fb.verdict === 'correct' || fb.shown) return true;
+  if (fb.verdict === 'invalid' || fb.verdict === 'offline') return false;
+  return s.problem?.type !== 'name' || (s.triesFor === s.problem && s.tries >= 2);
+}
+
 export function usePracticeHidesName(): boolean {
-  return usePractice((s) => !!s.problem?.hidesName && (!s.feedback || s.feedback.verdict === 'invalid' || s.feedback.verdict === 'offline'));
+  return usePractice((s) => !!s.problem?.hidesName && !answerRevealed(s));
 }
