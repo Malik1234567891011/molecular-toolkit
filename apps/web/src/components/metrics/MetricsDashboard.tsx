@@ -16,6 +16,16 @@ interface Metrics {
   kpis: Record<string, number | null>;
   samples: Record<string, number>;
   funnel: Array<{ step: string; sessions: number }>;
+  people: {
+    known: number;
+    active7: number;
+    active30: number;
+    cameBack: number;
+    medianSessionsPerWeek: number | null;
+    medianDaysActive: number | null;
+    weeks: Array<{ week: string; people: number; sessions: number }>;
+    roster: Array<{ id: string; firstSeen: number; lastSeen: number; daysActive: number; sessions: number; events: number; molecules: number; practice: number }>;
+  };
   inputClasses: Array<{ kind: string; count: number }>;
   provenance: Array<{ kind: string; count: number }>;
   daily: Array<{ date: string; sessions: number; events: number }>;
@@ -34,7 +44,23 @@ export function MetricsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
-      const r = await fetch('/api/v1/analytics/metrics', { cache: 'no-store' });
+      // ?key=… unlocks the dashboard and is remembered on this device afterwards.
+      const fromUrl = new URLSearchParams(location.search).get('key');
+      if (fromUrl) {
+        try {
+          localStorage.setItem('orbital:metrics-key', fromUrl);
+        } catch {
+          /* private window: the key still works for this page load */
+        }
+      }
+      let key = fromUrl;
+      try {
+        key = key ?? localStorage.getItem('orbital:metrics-key');
+      } catch {
+        /* ignore */
+      }
+      const r = await fetch(`/api/v1/analytics/metrics${key ? `?key=${encodeURIComponent(key)}` : ''}`, { cache: 'no-store' });
+      if (r.status === 404) throw new Error('This dashboard is private — open it with the key link.');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setM(await r.json());
       setError(null);
@@ -66,6 +92,67 @@ export function MetricsDashboard() {
         {!m && !error && <p className="text-[13px] text-text-3">Loading…</p>}
         {m && (
           <>
+            <section className="mb-6" aria-label="People">
+              <div className="mb-3 rounded-2xl border border-accent/40 bg-accent-soft/40 p-4">
+                <h2 className="text-[15px] font-semibold">People, not visits</h2>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-text-2">
+                  {m.people.known === 0 ? (
+                    <>No one has used Orbital since per-person counting was switched on — the numbers below still count visits.</>
+                  ) : (
+                    <>
+                      <b className="text-text">{m.people.active7} {m.people.active7 === 1 ? 'person' : 'people'}</b> used Orbital in the last 7 days
+                      {m.people.medianSessionsPerWeek !== null && <> — typically <b className="text-text">{m.people.medianSessionsPerWeek}×</b> a week each</>}.
+                      {' '}{m.people.known} {m.people.known === 1 ? 'person has' : 'people have'} used it in total, and{' '}
+                      <b className="text-text">{m.people.cameBack}</b> came back on another day.
+                    </>
+                  )}
+                </p>
+                <p className="mt-1 text-[11.5px] text-text-3">
+                  A person is one browser on one device: a random id in that browser, no account and no name. Clearing site data, or switching device, counts as someone new.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Tile label="People this week" value={String(m.people.active7)} sub="used it in the last 7 days" />
+                <Tile label="People this month" value={String(m.people.active30)} sub="used it in the last 30 days" />
+                <Tile label="Came back" value={m.people.known ? `${m.people.cameBack} of ${m.people.known}` : '—'} sub="used it on more than one day" />
+                <Tile label="Days used each" value={m.people.medianDaysActive === null ? '—' : String(m.people.medianDaysActive)} sub="median days a person was active" />
+              </div>
+              {m.people.weeks.length > 0 && (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <Card title="People each week" note="Distinct people who used Orbital that week">
+                    <VBars rows={m.people.weeks.map((w) => ({ label: w.week.replace(/^\d+-/, ''), value: w.people, detail: `${w.week}: ${w.people} people, ${w.sessions} visits` }))} unit="people" />
+                  </Card>
+                  <Card title="Who is using it" note="One row per person (anonymous): when they started, how often they come back">
+                    <div className="scroll-thin max-h-[260px] overflow-y-auto">
+                      <table className="w-full text-left text-[12.5px]">
+                        <thead className="sticky top-0 bg-panel text-[11px] uppercase tracking-[0.06em] text-text-3">
+                          <tr>
+                            <th className="py-1 pr-2">Person</th>
+                            <th className="py-1 pr-2">First</th>
+                            <th className="py-1 pr-2">Last</th>
+                            <th className="py-1 pr-2 text-right">Days</th>
+                            <th className="py-1 pr-2 text-right">Visits</th>
+                            <th className="py-1 text-right">Molecules</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-text-2">
+                          {m.people.roster.map((r) => (
+                            <tr key={r.id} className="border-t border-border">
+                              <td className="mono py-1 pr-2 text-text">{r.id}</td>
+                              <td className="py-1 pr-2">{new Date(r.firstSeen * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td className="py-1 pr-2">{new Date(r.lastSeen * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td className="py-1 pr-2 text-right">{r.daysActive}</td>
+                              <td className="py-1 pr-2 text-right">{r.sessions}</td>
+                              <td className="py-1 text-right">{r.molecules}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+              )}
+            </section>
             <section className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Headline metrics">
               <Tile label="Median time to first molecule" value={dur(m.kpis.medianSecondsToFirstMolecule)} sub={`${m.samples.timeToFirstMolecule} sessions measured`} />
               <Tile label="Names resolved" value={pct(m.kpis.nameResolutionRate)} sub={`of ${m.samples.nameInputs} typed inputs`} />

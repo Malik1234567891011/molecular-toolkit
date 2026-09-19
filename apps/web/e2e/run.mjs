@@ -398,6 +398,21 @@ test('rooms: a second student joins and sees the molecule and chat', async (page
   }
 });
 
+test('metrics: counts people, not just visits', async (page) => {
+  // Two "people" on one machine: a fresh browser profile each time.
+  for (const who of ['visitor-one', 'visitor-two']) {
+    await openStudio(page);
+    await page.evaluate((v) => localStorage.setItem('orbital:visitor', v), who);
+    await resolve(page, 'ethanol');
+    await waitState(page, () => window.__orbital.getState().doc.atoms.length === 3);
+    await page.waitForTimeout(2500); // the analytics queue flushes on a timer
+  }
+  await page.goto(BASE + '/metrics');
+  await page.waitForSelector('text=People, not visits');
+  const roster = await page.$$eval('table tbody tr', (rows) => rows.length);
+  assert(roster >= 2, `roster had ${roster} rows`);
+});
+
 test('metrics: dashboard loads headline numbers', async (page) => {
   await page.goto(BASE + '/metrics');
   await page.waitForSelector('text=Median time to first molecule', { timeout: 20000 });

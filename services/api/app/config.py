@@ -29,6 +29,9 @@ OPSIN_DIR = Path(os.environ.get("OPSIN_DIR", ROOT / "opsin"))
 OPSIN_JAR = OPSIN_DIR / "opsin-core-2.9.0-jar-with-dependencies.jar"
 OPSIN_CLASSES = OPSIN_DIR / "classes"
 
+# Set this and the metrics dashboard needs ?key=… ; leave it unset and the dashboard is open.
+METRICS_KEY = os.environ.get("ORBITAL_METRICS_KEY", "")
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # Org-level keys that are not scoped to a workspace need this header on every request.
 ANTHROPIC_WORKSPACE_ID = os.environ.get("ANTHROPIC_WORKSPACE_ID", "")

@@ -82,7 +82,7 @@ export function SettingsPanel() {
       </Block>
       <Account />
       <Block title="Your data">
-        <p className="text-[12px] leading-relaxed text-text-2">Molecules and progress are saved on this device. Scanned images are never stored. Nothing you type to the tutor is logged.</p>
+        <p className="text-[12px] leading-relaxed text-text-2">Molecules and progress are saved on this device. Scanned images are never stored. Nothing you type to the tutor is logged. Orbital counts which features get used, tagged with a random id kept in this browser so visits can be counted as people — no account, no name, and it never leaves this site.</p>
         <div className="flex gap-1.5">
           <button onClick={async () => download(`orbital-local-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(await exportAllLocal(), null, 2), 'application/json')} className="flex-1 rounded-lg border border-border py-1.5 text-[12.5px] hover:border-accent">
             Export all

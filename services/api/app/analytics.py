@@ -85,6 +85,69 @@ def compute() -> dict[str, Any]:
                 provenance[str(p.get("provenance") or "verified")] += 1
     provenance["unsupported"] += counts["structure_name_unsupported"]
 
+    # ---- People, not visits -------------------------------------------------------------
+    # Each browser carries a random id (props "v"). Events from before that shipped have none;
+    # they are counted as visits only, never invented into people.
+    now = time.time()
+    day = 24 * 3600
+    people: dict[str, dict[str, Any]] = defaultdict(lambda: {"first": None, "last": None, "days": set(), "sessions": set(), "events": 0, "names": 0, "practice": 0})
+    for at, session, name, props in rows:
+        try:
+            v = (json.loads(props or "{}") or {}).get("v")
+        except ValueError:
+            v = None
+        if not isinstance(v, str) or not v:
+            continue
+        p = people[v]
+        p["first"] = at if p["first"] is None else min(p["first"], at)
+        p["last"] = at if p["last"] is None else max(p["last"], at)
+        p["days"].add(datetime.fromtimestamp(at, tz=timezone.utc).strftime("%Y-%m-%d"))
+        p["sessions"].add(session)
+        p["events"] += 1
+        if name in ("input_name_resolved", "structure_name_verified"):
+            p["names"] += 1
+        if name in ("practice_started", "answer_checked", "hint_level_used"):
+            p["practice"] += 1
+
+    active_since = lambda days: sum(1 for p in people.values() if p["last"] and p["last"] > now - days * day)  # noqa: E731
+    week_of = lambda ts: datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%G-W%V")  # noqa: E731
+    weeks: dict[str, dict[str, set]] = defaultdict(lambda: {"people": set(), "sessions": set()})
+    for v, p in people.items():
+        for d in p["days"]:
+            weeks[datetime.strptime(d, "%Y-%m-%d").strftime("%G-W%V")]["people"].add(v)
+    for at, session, _, props in rows:
+        try:
+            v = (json.loads(props or "{}") or {}).get("v")
+        except ValueError:
+            v = None
+        if isinstance(v, str) and v:
+            weeks[week_of(at)]["sessions"].add(session)
+
+    # "Came back": used it on more than one day. Of those, how often per week they show up.
+    repeat = [p for p in people.values() if len(p["days"]) > 1]
+    per_week = []
+    for p in people.values():
+        span_days = max(1.0, ((p["last"] or now) - (p["first"] or now)) / day)
+        per_week.append(len(p["sessions"]) / max(1.0, span_days / 7))
+    roster = sorted(
+        (
+            {
+                # A short tag, not a name: enough to tell people apart on the dashboard.
+                "id": v[:6],
+                "firstSeen": p["first"],
+                "lastSeen": p["last"],
+                "daysActive": len(p["days"]),
+                "sessions": len(p["sessions"]),
+                "events": p["events"],
+                "molecules": p["names"],
+                "practice": p["practice"],
+            }
+            for v, p in people.items()
+        ),
+        key=lambda r: r["lastSeen"] or 0,
+        reverse=True,
+    )[:200]
+
     resolved = counts["input_name_resolved"]
     total_inputs = resolved + counts["input_name_failed"] + counts["input_name_ambiguous"]
     verified = counts["structure_name_verified"]
@@ -106,6 +169,19 @@ def compute() -> dict[str, Any]:
             "returningSessionShare": _rate(returning, sessions),
         },
         "samples": {"timeToFirstMolecule": len(ttfm), "nameInputs": total_inputs, "namedStructures": verified + unsupported, "hintedAnswers": hinted_answers},
+        "people": {
+            "known": len(people),
+            "active7": active_since(7),
+            "active30": active_since(30),
+            "cameBack": len(repeat),
+            "medianSessionsPerWeek": round(statistics.median(per_week), 1) if per_week else None,
+            "medianDaysActive": statistics.median([len(p["days"]) for p in people.values()]) if people else None,
+            "weeks": [
+                {"week": w, "people": len(d["people"]), "sessions": len(d["sessions"])}
+                for w, d in sorted(weeks.items())
+            ][-12:],
+            "roster": roster,
+        },
         "funnel": funnel,
         "inputClasses": [{"kind": k, "count": v} for k, v in input_classes.most_common() if v],
         "provenance": [{"kind": k, "count": v} for k, v in provenance.most_common() if v],

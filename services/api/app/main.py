@@ -1,6 +1,7 @@
 """Orbital chemistry API (FastAPI). Contracts follow spec §16 'Key API contracts'."""
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -310,6 +311,8 @@ def get_ar_asset(name: str):
 
 class EventsIn(BaseModel):
     session: str
+    # A random per-browser id (no account, no name): lets the dashboard count people, not visits.
+    visitor: str | None = None
     events: list[dict[str, Any]]
 
 
@@ -333,15 +336,22 @@ def events(body: EventsIn) -> dict[str, Any]:
         if name not in ALLOWED_EVENTS:
             continue
         props = {k: v for k, v in (e.get("props") or {}).items() if isinstance(v, (int, float, str, bool)) and k != "text"}
+        if body.visitor and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", body.visitor):
+            props["v"] = body.visitor
         store.event_add(float(e.get("at", time.time())), body.session[:64], name, json.dumps(props))
         n += 1
     return {"stored": n}
 
 
 @app.get("/v1/analytics/metrics")
-def metrics() -> dict[str, Any]:
+def metrics(key: str | None = None) -> dict[str, Any]:
     from . import analytics
 
+    # The dashboard counts people (anonymously, but individually), so it is for the owner:
+    # set ORBITAL_METRICS_KEY in the hosted environment to lock it. Unset = open (local dev).
+    wanted = config.METRICS_KEY
+    if wanted and not (key and secrets.compare_digest(key, wanted)):
+        raise HTTPException(404, "Not found")
     return analytics.compute()
 
 
