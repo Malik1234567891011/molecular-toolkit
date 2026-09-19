@@ -14,18 +14,23 @@ export const PROVENANCE: Record<Provenance, { label: string; long: string; tone:
   unsupported: { label: 'No verified name', long: 'Outside the verified scope — see the honest coverage message.', tone: 'bg-panel-raised text-text-2 border border-border' },
 };
 
-export function ProvenanceBadge({ p, compact }: { p: Provenance; compact?: boolean }) {
+const MINI: Partial<Record<Provenance, string>> = {
+  database_name: 'DB', accepted_common: 'Common', course_convention: 'Course', unverified_candidate: '!', offline: 'Offline', unsupported: '—',
+};
+
+/** `mini` is the phone-width form: an icon or a two-word label, with the full label for screen readers. */
+export function ProvenanceBadge({ p, compact, mini }: { p: Provenance; compact?: boolean; mini?: boolean }) {
   const info = PROVENANCE[p];
   return (
     <span
       title={info.long}
+      aria-label={mini ? info.label : undefined}
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${info.tone}`}
       data-provenance={p}
     >
-      {p === 'verified_systematic' && <I.Check size={12} strokeWidth={2.6} />}
+      {(p === 'verified_systematic' || (mini && p === 'candidate_verified')) && <I.Check size={12} strokeWidth={2.6} />}
       {p === 'pending' && <span className="h-2 w-2 animate-pulse rounded-full bg-current" />}
-      {!compact && info.label}
-      {compact && p !== 'verified_systematic' && info.label}
+      {mini ? MINI[p] : !compact ? info.label : p !== 'verified_systematic' ? info.label : null}
     </span>
   );
 }

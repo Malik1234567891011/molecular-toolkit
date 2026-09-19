@@ -20,6 +20,7 @@ import { ShareDialog } from './ShareDialog';
 import { CommandPalette } from './CommandPalette';
 import { ScanDialog } from './ScanDialog';
 import { Tour } from './Tour';
+import { BottomSheet, PEEK } from './BottomSheet';
 import { watchVerifiedChime } from '@/lib/sound';
 
 export function Studio() {
@@ -119,6 +120,14 @@ export function Studio() {
         </main>
         <SidePanel />
       </div>
+      {/* Phones: thumb dock + inspector sheet (hidden while the landing screen is up). */}
+      {!(ready && landing) && (
+        <>
+          <ElementRail dock />
+          <div className="shrink-0 md:hidden" style={{ height: PEEK }} aria-hidden />
+          <BottomSheet />
+        </>
+      )}
       <Notices />
       <Shortcuts />
       <ShareDialog />

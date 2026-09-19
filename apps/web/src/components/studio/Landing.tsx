@@ -32,8 +32,8 @@ export function Landing() {
   const close = () => useStudio.setState({ landing: false });
   const hasMol = useStudio((s) => s.doc.atoms.length > 0);
   return (
-    <div className="canvas-bg absolute inset-0 z-30 flex flex-col items-center justify-center overflow-hidden px-4" data-testid="landing">
-      <div className="pointer-events-none relative h-[30vh] min-h-[180px] w-full max-w-[520px]" aria-hidden>
+    <div className="canvas-bg absolute inset-0 z-30 flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden px-4 pb-8 sm:justify-center sm:pb-0" data-testid="landing">
+      <div className="pointer-events-none relative h-[30vh] min-h-[180px] w-full max-w-[520px] shrink-0" aria-hidden>
         {hero ? <Viewer doc={hero} theme={theme} interactive={false} /> : <div className="grid h-full place-items-center"><span className="h-10 w-10 animate-pulse rounded-full bg-accent-soft" /></div>}
       </div>
       <div className="relative z-10 -mt-2 w-full max-w-[680px] text-center">

@@ -1,22 +1,22 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useStudio } from './store';
 
-function systemTheme(): 'dark' | 'light' {
-  if (typeof window === 'undefined') return 'dark';
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+const LIGHT = '(prefers-color-scheme: light)';
+
+function subscribeSystem(cb: () => void) {
+  const mq = window.matchMedia(LIGHT);
+  mq.addEventListener('change', cb);
+  return () => mq.removeEventListener('change', cb);
 }
 
-/** Resolved theme, kept in sync with settings and the OS preference; mirrors onto <html>. */
+/**
+ * Resolved theme, kept in sync with settings and the OS preference. Hydration uses the server's
+ * value ('dark') and then switches, so theme-dependent inline colours never mismatch the HTML.
+ */
 export function useResolvedTheme(): 'dark' | 'light' {
   const pref = useStudio((s) => s.settings.theme);
-  const [sys, setSys] = useState<'dark' | 'light'>(() => (typeof document !== 'undefined' && document.documentElement.dataset.resolvedTheme === 'light' ? 'light' : systemTheme()));
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const on = () => setSys(mq.matches ? 'light' : 'dark');
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
+  const sys = useSyncExternalStore(subscribeSystem, () => (window.matchMedia(LIGHT).matches ? 'light' : 'dark'), () => 'dark' as const);
   return pref === 'system' ? sys : pref;
 }
 
@@ -27,8 +27,10 @@ export function useApplyTheme(): void {
   const pref = useStudio((s) => s.settings.theme);
   useEffect(() => {
     const el = document.documentElement;
-    el.dataset.theme = theme;
-    el.dataset.resolvedTheme = theme;
+    // Read the real theme here: during hydration `theme` is still the server's placeholder.
+    const actual = pref === 'system' ? (window.matchMedia(LIGHT).matches ? 'light' : 'dark') : pref;
+    el.dataset.theme = actual;
+    el.dataset.resolvedTheme = actual;
     const reduced = motion === 'reduced' || (motion === 'system' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     if (reduced) el.dataset.motion = 'reduced';
     else delete el.dataset.motion;

@@ -1,6 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useStudio } from '@/lib/store';
+import { useIsMobile } from '@/lib/useMobile';
 import { Inspector } from '../panels/Inspector';
 import { I } from '../ui/icons';
 
@@ -15,13 +16,15 @@ const RoomPanel = dynamic(() => import('../panels/RoomPanel').then((m) => m.Room
 const ResonancePanel = dynamic(() => import('../panels/ResonancePanel').then((m) => m.ResonancePanel), { ssr: false });
 const LibraryPanel = dynamic(() => import('../panels/LibraryPanel').then((m) => m.LibraryPanel), { ssr: false });
 
-const TITLES: Record<string, string> = {
+export const TITLES: Record<string, string> = {
   facts: 'Inspector', explain: 'Explain the name', practice: 'Practice', tutor: 'Ask this molecule', projection: 'Projection lab',
   settings: 'Settings', orbitals: 'Orbitals & ESP', mechanism: 'Mechanisms', room: 'Study room', library: 'Library', resonance: 'Resonance',
 };
 
 export function SidePanel() {
   const panel = useStudio((s) => s.panel);
+  // Phones get the bottom sheet instead; only one of them mounts the panel.
+  if (useIsMobile()) return null;
   return (
     <aside className="panel relative z-20 hidden w-[372px] shrink-0 flex-col border-y-0 border-r-0 md:flex" aria-label={TITLES[panel]} data-testid="side-panel">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-4">

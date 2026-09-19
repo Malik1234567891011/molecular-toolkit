@@ -6,6 +6,7 @@ import { track } from '@/lib/analytics';
 import { NameBar } from '../naming/NameBar';
 import { SearchBox } from './SearchBox';
 import { I } from '../ui/icons';
+import { useIsMobile } from '@/lib/useMobile';
 
 function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: Array<{ v: T; label: string; icon?: React.ReactNode; title?: string }>; onChange: (v: T) => void; label: string }) {
   return (
@@ -57,7 +58,18 @@ function MoreMenu() {
     window.addEventListener('pointerdown', close);
     return () => window.removeEventListener('pointerdown', close);
   }, [open]);
+  const mobile = useIsMobile();
+  const go = (p: SidePanel) => () => useStudio.setState({ panel: p, landing: false });
   const items: Array<{ label: string; icon: React.ReactNode; run: () => void; active?: boolean; kbd?: string }> = [
+    // On phones the panel buttons live here too.
+    ...(mobile
+      ? [
+          { label: 'Explain the name', icon: <I.Lightbulb size={15} />, run: go('explain'), active: panel === 'explain' },
+          { label: 'Projections', icon: <I.Layers size={15} />, run: go('projection'), active: panel === 'projection' },
+          { label: 'Practice', icon: <I.Target size={15} />, run: go('practice'), active: panel === 'practice' },
+          { label: 'Tutor', icon: <I.Chat size={15} />, run: go('tutor'), active: panel === 'tutor' },
+        ]
+      : []),
     { label: 'Library & compare', icon: <I.Book size={15} />, run: () => useStudio.setState({ panel: 'library', landing: false }), active: panel === 'library' },
     { label: 'Mechanisms', icon: <I.Flask size={15} />, run: () => useStudio.setState({ panel: 'mechanism', landing: false }), active: panel === 'mechanism' },
     { label: 'Resonance', icon: <I.Resonance size={15} />, run: () => useStudio.setState({ panel: 'resonance', landing: false }), active: panel === 'resonance' },
@@ -65,6 +77,7 @@ function MoreMenu() {
     { label: 'Study room', icon: <I.Users size={15} />, run: () => useStudio.setState({ panel: 'room', landing: false }), active: panel === 'room' },
     { label: 'Scan a structure', icon: <I.Scan size={15} />, run: () => bus.emit('open:scan') },
     { label: 'All commands', icon: <I.Search size={15} />, run: () => useStudio.setState({ paletteOpen: true }), kbd: '⌘K' },
+    ...(mobile ? [{ label: 'Settings', icon: <I.Settings size={15} />, run: go('settings'), active: panel === 'settings' }] : []),
   ];
   const anyActive = items.some((i) => i.active);
   return (
@@ -94,7 +107,7 @@ export function TopBar() {
   const canRedo = useStudio((s) => s.future.length > 0);
   const hasMol = useStudio((s) => s.doc.atoms.length > 0);
   return (
-    <header className="panel relative z-30 flex h-14 shrink-0 items-center gap-3 border-x-0 border-t-0 px-3">
+    <header className="panel relative z-30 flex h-14 shrink-0 items-center gap-1.5 border-x-0 border-t-0 px-2 sm:gap-3 sm:px-3">
       <button onClick={() => useStudio.setState({ landing: true })} className="flex items-center gap-2 pr-1" aria-label="Orbital home">
         <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden>
           <defs>
@@ -112,12 +125,15 @@ export function TopBar() {
       <div className="hidden w-[300px] shrink-0 md:block">
         <SearchBox />
       </div>
+      <button onClick={() => useStudio.setState({ paletteOpen: true })} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised md:hidden" aria-label="Find a molecule or command" data-testid="mobile-search">
+        <I.Search size={18} />
+      </button>
       <div className="min-w-0 flex-1 px-1">{hasMol && <NameBar />}</div>
       <div className="flex items-center gap-1">
         <button disabled={!canUndo} onClick={() => studio().undo()} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text disabled:opacity-30" title="Undo (⌘Z)" aria-label="Undo">
           <I.Undo size={17} />
         </button>
-        <button disabled={!canRedo} onClick={() => studio().redo()} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text disabled:opacity-30" title="Redo (⇧⌘Z)" aria-label="Redo">
+        <button disabled={!canRedo} onClick={() => studio().redo()} className="hidden rounded-lg p-1.5 sm:block text-text-2 hover:bg-panel-raised hover:text-text disabled:opacity-30" title="Redo (⇧⌘Z)" aria-label="Redo">
           <I.Redo size={17} />
         </button>
       </div>
@@ -135,17 +151,19 @@ export function TopBar() {
         ]}
       />
       <nav className="flex items-center gap-0.5" aria-label="Panels">
-        <PanelButton panel="explain" icon={<I.Lightbulb size={16} />} label="Explain" kbd="E" />
-        <PanelButton panel="projection" icon={<I.Layers size={16} />} label="Projections" />
-        <PanelButton panel="practice" icon={<I.Target size={16} />} label="Practice" />
-        <PanelButton panel="tutor" icon={<I.Chat size={16} />} label="Tutor" />
+        <div className="hidden items-center gap-0.5 md:flex">
+          <PanelButton panel="explain" icon={<I.Lightbulb size={16} />} label="Explain" kbd="E" />
+          <PanelButton panel="projection" icon={<I.Layers size={16} />} label="Projections" />
+          <PanelButton panel="practice" icon={<I.Target size={16} />} label="Practice" />
+          <PanelButton panel="tutor" icon={<I.Chat size={16} />} label="Tutor" />
+        </div>
         <MoreMenu />
       </nav>
       <div className="flex items-center gap-1">
         <button onClick={() => bus.emit('open:share')} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text" title="Share / export / AR" aria-label="Share, export or view in AR">
           <I.Share size={17} />
         </button>
-        <button onClick={() => useStudio.setState({ panel: 'settings' })} className="rounded-lg p-1.5 text-text-2 hover:bg-panel-raised hover:text-text" title="Settings" aria-label="Settings">
+        <button onClick={() => useStudio.setState({ panel: 'settings' })} className="hidden rounded-lg p-1.5 md:block text-text-2 hover:bg-panel-raised hover:text-text" title="Settings" aria-label="Settings">
           <I.Settings size={17} />
         </button>
       </div>

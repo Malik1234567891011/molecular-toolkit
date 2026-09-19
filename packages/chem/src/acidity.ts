@@ -113,7 +113,7 @@ export function acidSites(doc: Pick<MoleculeDocument, 'atoms' | 'bonds'>): AcidS
         add(i, 25, 'α-H to a nitrile', 'The anion is stabilized by resonance with the C≡N.');
       } else if (aromatic(i)) {
         add(i, 43, 'aromatic C–H', 'The aryl anion’s lone pair is in an sp² orbital, not delocalized in the ring.');
-      } else if (nb.some((c) => aromatic(c))) {
+      } else if (nb.some((c) => aromatic(c) && el(c) === 'C')) {
         add(i, 41, 'benzylic C–H', 'The benzylic anion delocalizes into the ring, but carbon holds charge poorly.');
       } else if (v.nbrs[i].some((j) => order(i, j) === 2)) {
         add(i, 44, 'vinylic C–H', 'An sp² carbanion, not delocalized.');

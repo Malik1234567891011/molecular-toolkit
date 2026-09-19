@@ -124,16 +124,21 @@ export function NameBar() {
         {useTokens ? (
           <NameTokens tokens={n!.tokens!} />
         ) : primary ? (
-          <span className="nomen text-[17px] font-medium">{primary.name}</span>
+          <span className="nomen text-[15px] font-medium sm:text-[17px]">{primary.name}</span>
         ) : n?.name && verification?.status !== 'done' ? (
           <NameTokens tokens={n.tokens ?? []} />
         ) : (
           <span className="text-[14px] text-text-2">{verification?.message ?? n?.unsupportedReason ?? 'Naming…'}</span>
         )}
       </div>
-      {(primary || verification?.status === 'pending') && <ProvenanceBadge p={provenance} />}
+      {(primary || verification?.status === 'pending') && (
+        <>
+          <span className="shrink-0 sm:hidden"><ProvenanceBadge p={provenance} mini /></span>
+          <span className="hidden shrink-0 sm:inline-flex"><ProvenanceBadge p={provenance} /></span>
+        </>
+      )}
       {verification && (verification.accepted.length > 0 || verification.unverified.length > 0) && (
-        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[12px] text-text-2 hover:bg-panel-raised" aria-expanded={open}>
+        <button onClick={() => setOpen((o) => !o)} className="hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[12px] text-text-2 hover:bg-panel-raised sm:flex" aria-expanded={open}>
           +{verification.accepted.length} <I.ChevronDown size={14} />
         </button>
       )}

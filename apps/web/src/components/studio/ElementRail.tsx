@@ -17,7 +17,7 @@ function RailButton({ active, onClick, title, children, testid }: { active?: boo
       aria-label={title}
       aria-pressed={active}
       data-testid={testid}
-      className={`grid h-10 w-10 place-items-center rounded-xl text-[14px] font-semibold transition ${active ? 'bg-accent text-accent-ink shadow' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}
+      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[14px] font-semibold transition ${active ? 'bg-accent text-accent-ink shadow' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}
     >
       {children}
     </button>
@@ -37,7 +37,7 @@ const TOOLS: Array<{ tool: Tool2D; title: string; icon: React.ReactNode; key?: s
   { tool: 'wavy', title: 'Wavy bond — unknown configuration', icon: <I.Wavy size={17} /> },
 ];
 
-export function ElementRail() {
+export function ElementRail({ dock = false }: { dock?: boolean }) {
   const armed = useStudio((s) => s.armedElement);
   const tool = useStudio((s) => s.tool2d);
   const view = useStudio((s) => s.view);
@@ -68,7 +68,11 @@ export function ElementRail() {
   };
 
   return (
-    <aside className="panel relative z-20 flex w-[58px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-y-0 border-l-0 py-2 scroll-thin" aria-label="Element and tool rail">
+    <aside
+      className={dock ? 'panel relative z-30 flex h-[52px] shrink-0 items-center gap-1 overflow-x-auto border-x-0 border-b-0 px-2 scroll-thin md:hidden' : 'panel relative z-20 hidden w-[58px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-y-0 border-l-0 py-2 scroll-thin md:flex'}
+      aria-label={dock ? 'Element and tool dock' : 'Element and tool rail'}
+      data-testid={dock ? 'mobile-dock' : 'element-rail'}
+    >
       {(view === '2d' || view === 'split') && (
         <>
           {TOOLS.map((t) => (
@@ -76,7 +80,7 @@ export function ElementRail() {
               {t.icon}
             </RailButton>
           ))}
-          <div className="my-1 h-px w-8 bg-border" />
+          <div className={dock ? "mx-1 h-7 w-px shrink-0 bg-border" : "my-1 h-px w-8 bg-border"} />
         </>
       )}
       {RAIL_ELEMENTS.map((el) => (
@@ -87,7 +91,7 @@ export function ElementRail() {
       <RailButton onClick={() => setTable(true)} title="Full periodic table" testid="periodic">
         <I.Grid size={16} />
       </RailButton>
-      <div className="my-1 h-px w-8 bg-border" />
+      <div className={dock ? "mx-1 h-7 w-px shrink-0 bg-border" : "my-1 h-px w-8 bg-border"} />
       <RailButton active={section === 'rings'} onClick={() => setSection(section === 'rings' ? null : 'rings')} title="Rings" testid="rail-rings">
         <I.Hexagon size={18} />
       </RailButton>
@@ -95,7 +99,7 @@ export function ElementRail() {
         <span className="text-[11px]">R–</span>
       </RailButton>
       {section && (
-        <div className="glass fade-up fixed left-[66px] z-40 w-[210px] rounded-2xl p-2" style={{ top: 120 }}>
+        <div className={`glass fade-up fixed z-40 w-[210px] rounded-2xl p-2 ${dock ? "bottom-[124px] right-2" : "left-[66px] top-[120px]"}`}>
           {section === 'rings' ? (
             <div className="grid grid-cols-2 gap-1">
               {RING_BUTTONS.map((r) => (
