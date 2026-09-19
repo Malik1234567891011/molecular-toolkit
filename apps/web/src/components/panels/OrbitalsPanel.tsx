@@ -140,46 +140,62 @@ function LevelDiagram() {
   const r = useOrbitals((s) => s.result)!;
   // Frontier region only: HOMO−2 … LUMO+2.
   const levels = r.orbitalEnergies_eV.map((e, k) => ({ e, index: r.orbitalEnergyStart + k })).filter((l) => l.index >= r.homoIndex - 2 && l.index <= r.homoIndex + 3);
+  // Degenerate orbitals (same energy) are drawn side by side on one level.
+  const groups: Array<{ e: number; members: typeof levels }> = [];
+  for (const l of [...levels].sort((a, b) => b.e - a.e)) {
+    const g = groups.find((x) => Math.abs(x.e - l.e) < 0.05);
+    if (g) g.members.push(l);
+    else groups.push({ e: l.e, members: [l] });
+  }
   const lo = Math.min(...levels.map((l) => l.e));
   const hi = Math.max(...levels.map((l) => l.e));
-  const H = 150;
-  const y = (e: number) => 12 + (1 - (e - lo) / (hi - lo || 1)) * (H - 24);
+  // Energy-ordered, but never closer than 20 px apart, so arrows and labels stay readable
+  // (a qualitative diagram, as in textbooks; the numbers carry the true energies).
+  const ys: number[] = [];
+  groups.forEach((g, k) => {
+    const trueY = 14 + (1 - (g.e - lo) / (hi - lo || 1)) * 122;
+    ys.push(k === 0 ? trueY : Math.max(trueY, ys[k - 1] + 20));
+  });
+  const H = Math.max(150, (ys.at(-1) ?? 0) + 16);
   const gap = r.lumoEnergy_eV !== null ? r.lumoEnergy_eV - r.homoEnergy_eV : null;
-  // Energy-true line positions, but labels pushed apart so they never overlap.
-  const labelY = new Map<number, number>();
-  const sorted = [...levels].sort((a, b) => y(a.e) - y(b.e));
-  let prev = -Infinity;
-  for (const l of sorted) {
-    const want = Math.max(y(l.e), prev + 12);
-    labelY.set(l.index, want);
-    prev = want;
-  }
+  const yOf = (index: number) => ys[groups.findIndex((g) => g.members.some((m) => m.index === index))];
   return (
     <figure className="rounded-xl border border-border bg-panel-raised p-2" data-testid="orb-levels">
-      <svg viewBox={`0 0 300 ${H}`} className="w-full" role="img" aria-label={`Orbital energy levels; HOMO ${r.homoEnergy_eV.toFixed(2)} eV, LUMO ${r.lumoEnergy_eV?.toFixed(2)} eV`}>
-        {levels.map((l) => {
-          const occ = l.index <= r.homoIndex;
-          const isHomo = l.index === r.homoIndex;
-          const isLumo = l.index === r.lumoIndex;
-          const yy = y(l.e);
+      <svg viewBox={`0 0 300 ${H.toFixed(0)}`} className="w-full" role="img" aria-label={`Orbital energy levels; HOMO ${r.homoEnergy_eV.toFixed(2)} eV, LUMO ${r.lumoEnergy_eV?.toFixed(2)} eV`}>
+        {groups.map((g, k) => {
+          const yy = ys[k];
+          const n = g.members.length;
+          const w = n === 1 ? 80 : (80 - (n - 1) * 8) / n;
+          const isHomo = g.members.some((m) => m.index === r.homoIndex);
+          const isLumo = g.members.some((m) => m.index === r.lumoIndex);
           return (
-            <g key={l.index}>
-              <line x1={90} x2={170} y1={yy} y2={yy} stroke={isHomo || isLumo ? 'var(--accent)' : 'var(--text-2)'} strokeWidth={isHomo || isLumo ? 2.5 : 1.5} />
-              {occ && (
-                <g stroke="var(--text)" strokeWidth={1.4}>
-                  <path d={`M 120 ${yy + 5} L 120 ${yy - 7} M 117 ${yy - 4} L 120 ${yy - 7} L 123 ${yy - 4}`} fill="none" />
-                  <path d={`M 140 ${yy - 5} L 140 ${yy + 7} M 137 ${yy + 4} L 140 ${yy + 7} L 143 ${yy + 4}`} fill="none" />
-                </g>
-              )}
-              <text x={82} y={labelY.get(l.index) ?? yy} textAnchor="end" dominantBaseline="central" fontSize={10.5} fill="var(--text-2)" className="mono">{l.e.toFixed(1)}</text>
-              {(isHomo || isLumo) && <text x={178} y={yy} dominantBaseline="central" fontSize={11} fontWeight={600} fill="var(--accent-strong)">{isHomo ? 'HOMO' : 'LUMO'}</text>}
+            <g key={g.members[0].index}>
+              {g.members.map((m, j) => {
+                const x1 = 90 + j * (w + 8);
+                const cx = x1 + w / 2;
+                const occ = m.index <= r.homoIndex;
+                const frontier = m.index === r.homoIndex || m.index === r.lumoIndex || isHomo || isLumo;
+                return (
+                  <g key={m.index}>
+                    <line x1={x1} x2={x1 + w} y1={yy} y2={yy} stroke={frontier ? 'var(--accent)' : 'var(--text-2)'} strokeWidth={frontier ? 2.5 : 1.5} />
+                    {occ && (
+                      <g stroke="var(--text)" strokeWidth={1.4} fill="none">
+                        <path d={`M ${cx - 6} ${yy + 5} L ${cx - 6} ${yy - 7} M ${cx - 9} ${yy - 4} L ${cx - 6} ${yy - 7} L ${cx - 3} ${yy - 4}`} />
+                        <path d={`M ${cx + 6} ${yy - 5} L ${cx + 6} ${yy + 7} M ${cx + 3} ${yy + 4} L ${cx + 6} ${yy + 7} L ${cx + 9} ${yy + 4}`} />
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+              <text x={82} y={yy} textAnchor="end" dominantBaseline="central" fontSize={10.5} fill="var(--text-2)" className="mono">{g.e.toFixed(1)}</text>
+              {(isHomo || isLumo) && <text x={178} y={yy} dominantBaseline="central" fontSize={11} fontWeight={600} fill="var(--accent-strong)">{isHomo ? 'HOMO' : 'LUMO'}{n > 1 ? ` (×${n})` : ''}</text>}
             </g>
           );
         })}
-        {gap !== null && r.lumoEnergy_eV !== null && (
+        {gap !== null && r.lumoIndex !== null && (
           <g>
-            <line x1={240} x2={240} y1={y(r.lumoEnergy_eV)} y2={y(r.homoEnergy_eV)} stroke="var(--text-3)" strokeDasharray="3 3" />
-            <text x={246} y={(y(r.lumoEnergy_eV) + y(r.homoEnergy_eV)) / 2} dominantBaseline="central" fontSize={10.5} fill="var(--text-2)">gap {gap.toFixed(1)} eV</text>
+            <line x1={240} x2={240} y1={yOf(r.lumoIndex)} y2={yOf(r.homoIndex)} stroke="var(--text-3)" strokeDasharray="3 3" />
+            <text x={246} y={(yOf(r.lumoIndex) + yOf(r.homoIndex)) / 2} dominantBaseline="central" fontSize={10.5} fill="var(--text-2)">gap {gap.toFixed(1)} eV</text>
           </g>
         )}
       </svg>

@@ -55,9 +55,28 @@ function MoreMenu() {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    // Keyboard: Escape closes (focus back on the button), arrows move between items.
+    const key = (e: KeyboardEvent) => {
+      const items = [...(ref.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]') ?? [])];
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        ref.current?.querySelector<HTMLButtonElement>('[aria-haspopup]')?.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const i = items.indexOf(document.activeElement as HTMLButtonElement);
+        items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+      }
+    };
     window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
+    window.addEventListener('keydown', key, true);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', key, true);
+    };
   }, [open]);
+  // Opening a panel by any route (palette, shortcut) closes the menu.
+  useEffect(() => setOpen(false), [panel]);
   const mobile = useIsMobile();
   const go = (p: SidePanel) => () => useStudio.setState({ panel: p, landing: false });
   const items: Array<{ label: string; icon: React.ReactNode; run: () => void; active?: boolean; kbd?: string }> = [
