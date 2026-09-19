@@ -163,20 +163,20 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
         </div>
       )}
       {search.cards.length > 0 && (
-        <div className="glass fade-up absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl p-3" data-testid="candidate-cards">
+        <div className="glass fade-up absolute left-0 top-full z-40 mt-2 w-[min(560px,calc(100vw-1.5rem))] rounded-2xl p-3" data-testid="candidate-cards">
           <div className="mb-2 text-[12.5px] text-text-2">
             <b className="text-text">“{search.result?.input.normalized}”</b> could mean more than one structure{search.result?.agreement ? ` — ${search.result.agreement}` : ''}. The differing region is highlighted.
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className={`grid gap-2 ${search.cards.length > 2 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
             {search.cards.map((c) => (
               <button
                 key={c.candidate.inchiKey}
                 onClick={() => void loadCandidate(c.candidate, c.label)}
                 className="group rounded-xl border border-border bg-panel-raised p-2 text-left transition hover:border-accent"
               >
-                <div className="h-[110px] w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: c.svg }} />
-                <div className="mt-1 truncate text-[12.5px] font-medium">{c.label}</div>
-                <div className="mono truncate text-[11px] text-text-3">{c.candidate.formula} · {c.candidate.sources.join(', ')}</div>
+                <div className="h-[120px] w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: c.svg }} />
+                <div className="nomen mt-1 line-clamp-2 text-[13px] font-medium first-letter:uppercase">{c.label}</div>
+                <div className="text-[11.5px] text-text-3">{c.candidate.formula.replace(/\d+/g, (d) => [...d].map((x) => '₀₁₂₃₄₅₆₇₈₉'[+x]).join(''))} · {c.how ?? c.candidate.sources.join(', ')}</div>
               </button>
             ))}
           </div>

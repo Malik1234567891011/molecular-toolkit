@@ -7,12 +7,13 @@ import { bus } from './events';
 import { freshGeometry } from './pipeline';
 import { studio, useStudio } from './store';
 import { call } from './worker';
+import type { Analysis } from './types';
 
 export interface SearchState {
   query: string;
   busy: boolean;
   result: ResolveResponse | null;
-  cards: Array<{ candidate: ResolveCandidate; svg: string; label: string }>;
+  cards: Array<{ candidate: ResolveCandidate; svg: string; label: string; how?: string }>;
   error: string | null;
   set: (p: Partial<SearchState>) => void;
 }
@@ -125,12 +126,23 @@ export async function resolveQuery(query: string): Promise<void> {
       /* no highlight */
     }
     const dark = document.documentElement.dataset.resolvedTheme !== 'light';
+    const readAs = (c: ResolveCandidate) =>
+      c.sources.includes('smiles') ? 'read as SMILES'
+        : c.sources.includes('opsin') ? 'read as a systematic name'
+          : c.sources.some((x) => x.includes('formula')) ? 'read as a formula (PubChem)'
+            : c.sources.some((x) => x.includes('pubchem')) ? 'PubChem name match'
+              : c.sources.join(', ');
     const cards = await Promise.all(
-      res.candidates.map(async (c, k) => ({
-        candidate: c,
-        svg: await call<string>('svg', { doc: docs[k], width: 220, height: 150, highlight: diff[k], dark }).catch(() => ''),
-        label: c.pubchemTitle ?? c.iupacName ?? (c.sources.includes('smiles') ? 'as SMILES' : c.sources.includes('opsin') ? 'as a systematic name' : c.formula),
-      })),
+      res.candidates.map(async (c, k) => {
+        // A candidate with no database title still gets a name, from the course engine.
+        const named = c.pubchemTitle ?? c.iupacName ?? (await call<Analysis>('analyze', { doc: docs[k], profileId: studio().settings.profileId }).then((a) => a.naming?.name ?? null).catch(() => null));
+        return {
+          candidate: c,
+          svg: await call<string>('svg', { doc: docs[k], width: 260, height: 160, highlight: diff[k], dark }).catch(() => ''),
+          label: named ?? c.formula,
+          how: readAs(c),
+        };
+      }),
     );
     search.set({ cards });
   } else {
