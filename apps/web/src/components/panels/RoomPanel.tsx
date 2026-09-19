@@ -30,7 +30,7 @@ export function RoomPanel() {
           <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Room code or link" className="min-w-0 flex-1 rounded-lg border border-border bg-panel-raised px-2.5 py-1.5 text-[13px]" aria-label="Room code or link" data-testid="room-code" />
           <button type="submit" className="rounded-lg border border-border px-3 text-[13px] hover:border-accent">Join</button>
         </form>
-        <p className="text-[11.5px] text-text-3">Rooms are temporary and private to people with the link. Nothing is stored on the server.</p>
+        <p className="text-[11.5px] text-text-3">Rooms are private to people with the link. A room’s molecule and chat are kept only while it’s in use, and deleted an hour after it goes quiet.</p>
       </div>
     );
   }

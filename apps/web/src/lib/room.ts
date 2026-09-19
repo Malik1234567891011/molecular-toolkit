@@ -1,7 +1,8 @@
 'use client';
 /**
  * Study rooms (spec §14): a shared molecule, live cursors and a shared chat (with tutor answers)
- * over Yjs. Rooms are ephemeral on the relay; nothing is stored server-side.
+ * over Yjs. Rooms are ephemeral: in the relay's memory locally, and hosted in Redis until an hour
+ * after the room goes quiet (services/rooms/server.mjs).
  */
 import { create } from 'zustand';
 import type { MoleculeDocument } from '@orbital/chem';
