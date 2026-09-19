@@ -69,3 +69,12 @@ Checked against the spec by using the app in Chrome, fixing what fell short:
 - Production timings (headless, warm): molecule restored ~0.5 s, analysis ~0.2–0.75 s,
   verification ~0.6 s before caching.
 - E2E: `apps/web/e2e/run.mjs`, 15 user tasks, all passing.
+- Later in the pass: aromatic rings render aromatic in 3D; clutter-aware default camera; the
+  molecule's name gets room in the top bar; Split view refits and keeps a one-line toolbar;
+  notices no longer cover panel footers; the conformer filmstrip; name lookup with real typo
+  suggestions ('did you mean isopropanol?'); meso detection in isomer comparison; practice
+  name problems allow a second try and open beside the skeletal drawing.
+- Scan: the reader's SMILES decides topology (it traces rings less reliably than it writes
+  them), MCS maps a faulty tracing onto it, a clean depiction is fitted and snapped onto the
+  drawing's ink; readings that still disagree are flagged with a one-click alternative.
+- Screenshot tour: `npm run screenshots -w @orbital/web -- <dir>` (22 scenes, GPU-rendered).

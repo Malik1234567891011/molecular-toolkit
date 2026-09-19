@@ -483,6 +483,8 @@ async function buildProblem(type: ProblemType, concept: Concept, level: number, 
     case 'name': {
       if (!an || !trace) return null;
       await waitForVerification();
+      // Names are read off skeletal drawings: show the 2D structure beside the model.
+      if (studio().view === '3d') useStudio.setState({ view: 'split' });
       return { ...base, smiles: smiles ?? an.identifiers?.canonicalSmiles, trace, accepted: acceptedNames(an), prompt: 'Name this molecule.', sub: 'Type the IUPAC name. Any accepted name passes — grading compares structures, not strings.', hidesName: true };
     }
     case 'parent': {
