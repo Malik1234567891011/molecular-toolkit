@@ -58,6 +58,11 @@ export async function openIsomers(counts: Record<string, number>, label?: string
   try {
     const r = await call<Page>('isomers', { counts, profileId: studio().settings.profileId, offset: 0, count: PAGE, dark: document.documentElement.dataset.resolvedTheme !== 'light' });
     useIsomers.setState({ cards: r.page, total: r.total, truncated: r.truncated, note: r.note, loading: false });
+    // One possible structure (H2O, CCl4): open it instead of showing a list of one.
+    if (r.total === 1 && r.page[0]) {
+      await openIsomer(r.page[0]);
+      return 1;
+    }
     if (r.total) {
       useStudio.setState({ panel: 'isomers', landing: false });
       track('explanation_interaction', { kind: 'isomers', formula, count: r.total });

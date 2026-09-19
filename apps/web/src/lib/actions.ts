@@ -1,6 +1,6 @@
 'use client';
 import { create } from 'zustand';
-import { emptyDocument, naming, parseMolfile, parseSmiles, stereoMismatches, suppressHydrogens, updateConformer, type MoleculeDocument } from '@orbital/chem';
+import { emptyDocument, naming, parseCondensed, parseMolfile, parseSmiles, stereoMismatches, suppressHydrogens, updateConformer, writeSmiles, type MoleculeDocument } from '@orbital/chem';
 import { api, isOnline, type ResolveCandidate, type ResolveResponse } from './api';
 import { track } from './analytics';
 import { bus } from './events';
@@ -101,6 +101,18 @@ export async function resolveQuery(query: string): Promise<void> {
     const ok = await offlineResolve(q);
     search.set({ busy: false, error: ok ? null : 'You are offline. Names need the naming service; SMILES, molfiles and recent molecules still work.' });
     return;
+  }
+  // Condensed structural formulas — HN(CH3)2, CH3CH2OH, (CH3)3COH — are what a page of notes
+  // looks like. They are neither names nor molecular formulas, so read them here, offline and
+  // instantly, before asking the naming service.
+  const condensed = parseCondensed(q);
+  if (condensed) {
+    const smiles = writeSmiles(condensed.doc, { includeStereo: false }).smiles;
+    if (await loadStructure(smiles, undefined, `Load ${q}`)) {
+      track('input_name_resolved', { kind: 'condensed' });
+      search.set({ busy: false, note: `Read “${q}” as a structural formula.` });
+      return;
+    }
   }
   let res: ResolveResponse;
   try {

@@ -78,7 +78,7 @@ const CHAPTERS: Chapter[] = [
         id: 'search',
         icon: <I.Search size={18} />,
         title: 'Type a name',
-        what: 'Find any molecule by its common name (caffeine, aspirin), its IUPAC name (2-methylpropan-1-ol), a formula, a SMILES string or a CAS number.',
+        what: 'Find any molecule by its common name (caffeine, aspirin), its IUPAC name (2-methylpropan-1-ol), a formula written the way you write it in your notes (CH3CH2OH, HN(CH3)2, (CH3)3COH), a SMILES string or a CAS number.',
         steps: [
           <>Click the search box at the top left, or press <K>⌘K</K> (<K>Ctrl K</K> on Windows).</>,
           <>Type the name and press <K>Enter</K>. It appears in 3D with its name checked.</>,
@@ -96,7 +96,7 @@ const CHAPTERS: Chapter[] = [
           <>Type the formula in the search box (capital letters for elements: <span className="mono">C5H10</span>, <span className="mono">C4H10O</span>).</>,
           'Tap any isomer to open it in 3D and name it, then come back to the list.',
         ],
-        tip: 'These are constitutional isomers — different connections. Cis/trans and R/S versions of one skeleton aren’t listed separately; open one and use Projections for those.',
+        tip: <>These are constitutional isomers — different connections. Cis/trans and R/S versions of one skeleton aren’t listed separately; open one and use Projections for those. Write a <i>structural</i> formula instead (<span className="mono">CH3CH2OH</span>) and Orbital opens that exact molecule.</>,
         tryIt: { label: 'Isomers of C5H10', run: async () => { const { openIsomers } = await import('@/lib/isomers'); await openIsomers({ C: 5, H: 10 }, 'C5H10'); } },
       },
       {

@@ -243,6 +243,29 @@ test('formula: an isomer list still appears with the naming service unreachable'
   await page.waitForSelector('text=/2 constitutional isomers/');
 });
 
+test('condensed formulas: HN(CH3)2 and friends open the structure they describe', async (page) => {
+  await openStudio(page);
+  const cases = [
+    ['HN(CH3)2', { C: 2, N: 1, H: 7 }],
+    ['CH3CH2OH', { C: 2, O: 1, H: 6 }],
+    ['(CH3)3COH', { C: 4, O: 1, H: 10 }],
+    ['CH3COOH', { C: 2, O: 2, H: 4 }],
+  ];
+  for (const [text, want] of cases) {
+    await page.fill('[data-testid=search-input]', text);
+    await page.keyboard.press('Enter');
+    await waitState(page, (w) => {
+      const c = window.__orbital.getState().analysis?.formula?.counts;
+      return !!c && Object.entries(w).every(([el, n]) => c[el] === n);
+    }, want, 30000);
+  }
+  // It says how it read the input, and the name comes out right.
+  await page.waitForSelector('[data-testid=search-note]');
+  await waitVerified(page);
+  const s = await state(page);
+  assert(/acetic acid|ethanoic acid/i.test(s.name ?? ''), `named ${s.name}`);
+});
+
 test('name typos: a misspelled systematic name suggests the right one', async (page) => {
   await openStudio(page);
   await page.click('[data-testid=search-input]');
