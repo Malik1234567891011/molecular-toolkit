@@ -8,6 +8,7 @@ import {
 } from '@/lib/practice';
 import { I } from '../ui/icons';
 import { FischerView } from './ProjectionLab';
+import { Newman } from './Newman';
 
 const QUIZ_TYPES: Array<{ type: ProblemType; label: string }> = [
   { type: 'name', label: 'Name it' },
@@ -18,6 +19,8 @@ const QUIZ_TYPES: Array<{ type: ProblemType; label: string }> = [
   { type: 'geometry', label: 'Geometry' },
   { type: 'groups', label: 'Groups' },
   { type: 'fischer', label: 'Fischer' },
+  { type: 'newman', label: 'Newman' },
+  { type: 'chair', label: 'Axial/equatorial' },
 ];
 
 export function PracticePanel() {
@@ -142,7 +145,7 @@ function Home() {
 }
 
 function conceptFor(t: ProblemType) {
-  return ({ name: 'parent', parent: 'parent', number: 'locants', principal: 'suffix', stereo: 'rs', geometry: 'geometry', groups: 'groups', fischer: 'projection', build: 'build', acidity: 'acidity', repair: 'valence' } as const)[t];
+  return ({ name: 'parent', parent: 'parent', number: 'locants', principal: 'suffix', stereo: 'rs', geometry: 'geometry', groups: 'groups', fischer: 'projection', build: 'build', acidity: 'acidity', repair: 'valence', newman: 'conformation', chair: 'conformation' } as const)[t];
 }
 
 function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
@@ -267,6 +270,11 @@ function ProblemCard({ problem }: { problem: Problem }) {
         </form>
       )}
 
+      {problem.type === 'newman' && problem.bondId && (
+        <div className="flex justify-center rounded-xl border border-border bg-panel-raised py-1" data-testid="practice-newman">
+          <Newman bondId={problem.bondId} size={170} />
+        </div>
+      )}
       {problem.choices && problem.type !== 'fischer' && <Choices problem={problem} disabled={!!done} />}
       {problem.type === 'fischer' && problem.fischer && problem.trace && <FischerChoices problem={problem} disabled={!!done} />}
       {problem.type === 'acidity' && <Acidity problem={problem} disabled={!!done} />}

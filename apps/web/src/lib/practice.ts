@@ -6,18 +6,20 @@
  */
 import { create } from 'zustand';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import { applyCommand, naming, parseSmiles, type AtomId, type MoleculeDocument } from '@orbital/chem';
+import { MolView, analyzeChair, applyCommand, chairFlipFrames, chairRings, naming, parseSmiles, v3, type AtomId, type BondId, type MoleculeDocument, type Vec3 } from '@orbital/chem';
 import { api, isOnline, type CheckAnswerResponse } from './api';
 import { track } from './analytics';
 import { studio, useStudio } from './store';
 import { call } from './worker';
 import { loadStructure } from './actions';
 import type { Analysis, Highlight } from './types';
+import { currentDihedral, dihedralFor, rotateBond, rotationEnds } from './conformer';
+import { bus } from './events';
 
 // ---------------------------------------------------------------------------------------------
 // Concepts and problem types
 
-export type Concept = 'suffix' | 'parent' | 'locants' | 'alphabetization' | 'rs' | 'ez' | 'geometry' | 'groups' | 'acidity' | 'projection' | 'build' | 'valence';
+export type Concept = 'suffix' | 'parent' | 'locants' | 'alphabetization' | 'rs' | 'ez' | 'geometry' | 'groups' | 'acidity' | 'projection' | 'conformation' | 'build' | 'valence';
 
 export const CONCEPTS: Array<{ id: Concept; label: string }> = [
   { id: 'parent', label: 'Parent chain' },
@@ -27,6 +29,7 @@ export const CONCEPTS: Array<{ id: Concept; label: string }> = [
   { id: 'rs', label: 'R / S' },
   { id: 'ez', label: 'E / Z' },
   { id: 'projection', label: 'Projections' },
+  { id: 'conformation', label: 'Conformations' },
   { id: 'geometry', label: 'Geometry' },
   { id: 'groups', label: 'Functional groups' },
   { id: 'acidity', label: 'Acidity' },
@@ -34,17 +37,18 @@ export const CONCEPTS: Array<{ id: Concept; label: string }> = [
   { id: 'valence', label: 'Valence' },
 ];
 
-export type ProblemType = 'name' | 'build' | 'parent' | 'number' | 'principal' | 'stereo' | 'geometry' | 'groups' | 'acidity' | 'fischer' | 'repair';
+export type ProblemType = 'name' | 'build' | 'parent' | 'number' | 'principal' | 'stereo' | 'geometry' | 'groups' | 'acidity' | 'fischer' | 'repair' | 'newman' | 'chair';
 
 export const TYPE_LABEL: Record<ProblemType, string> = {
   name: 'Name the structure', build: 'Build from the name', parent: 'Choose the parent chain', number: 'Number correctly',
   principal: 'Principal group', stereo: 'Assign the configuration', geometry: 'Predict the geometry', groups: 'Identify functional groups',
-  acidity: 'Rank acidity', fischer: 'Match the projection', repair: 'Repair the structure',
+  acidity: 'Rank acidity', fischer: 'Match the projection', repair: 'Repair the structure', newman: 'Name the conformation',
+  chair: 'Axial or equatorial',
 };
 
 const TYPES_FOR: Record<Concept, ProblemType[]> = {
   parent: ['parent', 'name'], suffix: ['principal', 'name'], locants: ['number', 'name'], alphabetization: ['name'],
-  rs: ['stereo'], ez: ['stereo'], projection: ['fischer'], geometry: ['geometry'], groups: ['groups'], acidity: ['acidity'],
+  rs: ['stereo'], ez: ['stereo'], projection: ['fischer'], conformation: ['newman', 'chair'], geometry: ['geometry'], groups: ['groups'], acidity: ['acidity'],
   build: ['build'], valence: ['repair'],
 };
 
@@ -73,6 +77,12 @@ export interface Problem {
   answer?: string[];
   acidity?: Array<{ id: string; name: string; smiles: string; pKa: number }>;
   fischer?: { correct: MoleculeDocument; mirror: MoleculeDocument; flip: boolean };
+  /** Newman problems: the bond looked down and the two reference groups. */
+  bondId?: BondId;
+  refAtoms?: [string, string];
+  dihedral?: number;
+  /** Chair problems: the ring and the substituent asked about. */
+  chair?: { ring: AtomId[]; ringAtom: AtomId; sub: AtomId; element: string };
   /** Snapshot of the analysis the problem was built from (grading must not drift if the user edits). */
   trace?: naming.NamingTrace;
   accepted?: string[];
@@ -405,7 +415,10 @@ export async function startProblem(opts: { type?: ProblemType; concept?: Concept
     // Difficulty follows mastery: one level per box, never jumping more than one.
     const level = Math.min(4, Math.max(1, box));
     let smiles = opts.smiles;
-    if (!smiles && source !== 'molecule' && type !== 'acidity' && type !== 'repair') {
+    if (!smiles && source !== 'molecule' && (type === 'newman' || type === 'chair')) {
+      const pool = (type === 'newman' ? NEWMAN_BANK : CHAIR_BANK).filter((b) => b.level <= level + 1);
+      smiles = pick(pool, seed >>> 3).smiles;
+    } else if (!smiles && source !== 'molecule' && type !== 'acidity' && type !== 'repair') {
       const pool = BANK.filter((b) => b.concepts.includes(concept));
       const near = pool.filter((b) => Math.abs(b.level - level) <= 1);
       smiles = pick(near.length ? near : pool.length ? pool : BANK, seed >>> 3).smiles;
@@ -529,6 +542,10 @@ async function buildProblem(type: ProblemType, concept: Concept, level: number, 
       const choices = shuffle([...present, ...distract], seed).map((k) => ({ id: k, label: labels[k] ?? FG[k] ?? k }));
       return { ...base, concept: 'groups', choices, multi: true, answer: present, prompt: 'Select every functional group in this molecule.', hidesName: false };
     }
+    case 'newman':
+      return an ? buildNewman(base, level, seed) : null;
+    case 'chair':
+      return an ? buildChair(base, level, seed) : null;
     case 'fischer': {
       if (!an || !trace) return null;
       const centres = an.stereo.centres.filter((c) => c.specified);
@@ -645,6 +662,10 @@ function hintFor(p: Problem, level: number): string {
       return ['The more stable the conjugate base, the stronger the acid.', 'Compare which atom carries the negative charge: more electronegative atoms hold it better (same row).', 'Resonance spreads the charge — carboxylates beat alkoxides.', 'Nearby electronegative atoms (F, Cl, NO₂) pull charge away and increase acidity.', 'sp C–H is more acidic than sp² and sp³ C–H (more s character).'][level - 1];
     case 'fischer':
       return ['In a Fischer projection, horizontal bonds come toward you and vertical bonds go away.', 'Find the centre in 3D and turn the model so the chain runs up–down, curving away from you.', 'Only one of the two drawings has the groups on the sides you see.', 'The two options are mirror images: exactly one matches.', 'Assign R/S to both and to the model — the matching descriptor wins.'][level - 1];
+    case 'newman':
+      return ['Find the two reference groups: one on the front carbon, one on the back carbon.', 'Staggered: back bonds sit between front bonds. Eclipsed: back bonds hide behind front bonds.', 'Measure the angle between the two reference groups around the circle.', '180° = anti, 60° = gauche, 120° = eclipsed (group eclipses H), 0° = totally eclipsed (groups eclipse each other).', `The dihedral here is ${Math.round(Math.abs(p.dihedral ?? 0))}°.`][level - 1];
+    case 'chair':
+      return ['Every ring carbon has one axial and one equatorial position.', 'Axial bonds are parallel to the ring’s axis — straight up or straight down.', 'Equatorial bonds point outward, roughly along the ring’s mean plane.', 'Up-carbons have their axial bond pointing up; down-carbons, down.', 'Compare the highlighted bond with the ring’s axis (the up direction in this view).'][level - 1];
     case 'repair':
       return ['Find the atom with the red valence ring.', 'Count its bonds: C makes 4, N makes 3, O makes 2 when neutral.', 'Delete one bond or atom attached to it.', 'You could also give it a charge — but only if that species is real (oxonium, ammonium).', BROKEN.find((b) => b.smiles === p.smiles)?.fix ?? 'Remove the extra bond.'][level - 1];
     case 'build':
@@ -711,6 +732,8 @@ async function grade(p: Problem, input: string, s: PracticeState): Promise<Feedb
     case 'stereo':
     case 'geometry':
     case 'groups':
+    case 'newman':
+    case 'chair':
     case 'fischer': {
       const picked = [...s.picked].sort();
       const answer = [...(p.answer ?? [])].sort();
@@ -767,12 +790,196 @@ function explainChoice(p: Problem, ok: boolean, picked: string[]): Feedback {
       if (ok) return { verdict: 'correct', title: 'All found.', detail: groups.map((g) => g.label + (g.detail ? ` (${g.detail})` : '')) };
       return { verdict: 'wrong', title: 'Not quite.', detail: [...(missed.length ? [`Missed: ${missed.join(', ')}.`] : []), ...(extra.length ? [`Not present: ${extra.join(', ')}.`] : []), 'The groups are highlighted on the model.'], concept: 'groups' };
     }
+    case 'newman': {
+      const d = Math.round(Math.abs(((p.dihedral ?? 0) + 540) % 360 - 180));
+      const why: Record<string, string> = {
+        anti: 'Anti is the lowest-energy conformation: the two groups are as far apart as possible.',
+        gauche: 'Gauche is staggered but the two groups are 60° apart — about 3.8 kJ/mol above anti for butane (steric strain).',
+        eclipsed: 'Each group eclipses a hydrogen: torsional strain puts it about 16 kJ/mol above anti for butane.',
+        syn: 'The two groups eclipse each other: the highest-energy conformation (about 19 kJ/mol above anti for butane).',
+      };
+      const detail = [`The dihedral between the reference groups is ${d}°.`, why[p.answer![0]], 'Energy order: anti < gauche < eclipsed < totally eclipsed.'];
+      return ok ? { verdict: 'correct', title: `Yes — ${label(p.answer![0])}.`, detail } : { verdict: 'wrong', title: `It is ${label(p.answer![0])}.`, detail, concept: 'conformation' };
+    }
+    case 'chair': {
+      const pos = p.answer![0];
+      const big = p.chair?.element !== 'H';
+      const detail = [
+        pos === 'axial' ? 'The bond runs parallel to the ring axis — straight up or down from its carbon.' : 'The bond points out from the ring, roughly along its equator.',
+        big ? (pos === 'axial' ? 'Axial substituents clash with the two axial hydrogens on the same face (1,3-diaxial strain), so a ring flip to put it equatorial is favoured.' : 'Equatorial is the preferred position for substituents: no 1,3-diaxial strain.') : '',
+        'Try Projections → Chair and flip the ring: every axial position becomes equatorial.',
+      ].filter(Boolean);
+      return ok ? { verdict: 'correct', title: `Yes — ${pos}.`, detail } : { verdict: 'wrong', title: `It is ${pos}.`, detail, concept: 'conformation' };
+    }
     case 'fischer':
       return ok
         ? { verdict: 'correct', title: 'Yes — that projection matches.', detail: ['The other one is its mirror image (every centre inverted).'] }
         : { verdict: 'wrong', title: 'That one is the mirror image.', detail: ['Swapping the two horizontal groups — or taking the mirror image — inverts each centre. Check which groups point toward you in 3D.'], concept: 'projection' };
   }
   return { verdict: ok ? 'correct' : 'wrong', title: ok ? 'Correct.' : 'Not quite.', detail: [] };
+}
+
+// --- Conformations (stereo trainer) ------------------------------------------------------------
+
+/** Chains where each end of the central bond carries exactly one group besides H — the textbook set. */
+export const NEWMAN_BANK: Array<{ smiles: string; level: number }> = [
+  { smiles: 'CCCC', level: 1 },
+  { smiles: 'ClCCCl', level: 1 },
+  { smiles: 'BrCCBr', level: 2 },
+  { smiles: 'CCCO', level: 2 },
+  { smiles: 'OCCO', level: 2 },
+  { smiles: 'CCCCC', level: 3 },
+  { smiles: 'CCCBr', level: 3 },
+];
+
+export const CHAIR_BANK: Array<{ smiles: string; level: number }> = [
+  { smiles: 'CC1CCCCC1', level: 1 },
+  { smiles: 'OC1CCCCC1', level: 1 },
+  { smiles: 'ClC1CCCCC1', level: 2 },
+  { smiles: 'CC(C)(C)C1CCCCC1', level: 2 },
+  { smiles: 'C[C@H]1CC[C@@H](C)CC1', level: 3 },
+  { smiles: 'C[C@H]1CC[C@H](C)CC1', level: 3 },
+  { smiles: 'C[C@H]1CCCC[C@@H]1C', level: 4 },
+];
+
+const CONFORMATIONS = [
+  { id: 'anti', label: 'anti (staggered, 180°)' },
+  { id: 'gauche', label: 'gauche (staggered, 60°)' },
+  { id: 'eclipsed', label: 'eclipsed (120°)' },
+  { id: 'syn', label: 'totally eclipsed (0°)' },
+];
+
+function conformationOf(dihedral: number): string {
+  const d = Math.abs(((dihedral + 540) % 360) - 180);
+  return d > 150 ? 'anti' : d > 90 ? 'eclipsed' : d > 30 ? 'gauche' : 'syn';
+}
+
+function waitForGeometry(timeout = 12000): Promise<void> {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const tick = () => {
+      const g = studio().geometry;
+      if ((g !== 'idealized' && g !== 'relaxing') || Date.now() - t0 > timeout) resolve();
+      else setTimeout(tick, 120);
+    };
+    tick();
+  });
+}
+
+function coordsNow(): Record<string, Vec3> {
+  const d = studio().doc;
+  return (d.conformers.find((c) => c.id === d.selectedConformerId) ?? d.conformers[0])?.coordinates ?? {};
+}
+
+async function buildNewman(base: Pick<Problem, 'id' | 'type' | 'concept' | 'level' | 'source'>, level: number, seed: number): Promise<Problem | null> {
+  await waitForGeometry();
+  const doc = studio().doc;
+  const view = new MolView(doc);
+  const heavy = (i: number) => view.nbrs[i].filter((j) => doc.atoms[j].element !== 'H');
+  // A single, acyclic bond with one more heavy group on each end.
+  const cands = doc.bonds.filter((b) => {
+    if (b.order !== 1) return false;
+    const i = view.idx(b.a1);
+    const j = view.idx(b.a2);
+    return heavy(i).length === 2 && heavy(j).length === 2 && doc.atoms[i].element === 'C' && doc.atoms[j].element === 'C' && rotationEnds(b.id) !== null;
+  });
+  // Prefer the central bond.
+  cands.sort((x, y) => Math.abs(view.idx(x.a1) + view.idx(x.a2) - (doc.atoms.length - 1)) - Math.abs(view.idx(y.a1) + view.idx(y.a2) - (doc.atoms.length - 1)));
+  const bond = cands[0];
+  if (!bond) return null;
+  const dih = dihedralFor(bond.id);
+  if (!dih) return null;
+  const targets = level <= 1 ? [180, 60, 0] : [180, 60, -60, 120, -120, 0];
+  const target = pick(targets, seed >>> 5);
+  for (let k = 0; k < 2; k++) {
+    const now = currentDihedral(dih);
+    if (now === null) return null;
+    const delta = ((target - now + 540) % 360) - 180;
+    if (Math.abs(delta) < 1) break;
+    rotateBond(bond.id, delta);
+  }
+  const final = currentDihedral(dih) ?? target;
+  const ends = [dih[0], dih[3]] as [string, string];
+  const c = coordsNow();
+  const p1 = c[bond.a1];
+  const p2 = c[bond.a2];
+  // After the load's own auto-fit has settled, look straight down the bond (front carbon nearest).
+  if (p1 && p2) lookLater({ dir: v3.norm(v3.sub(p1, p2)), target: v3.scale(v3.add(p1, p2), 0.5) });
+  hl({ id: 'practice:target', atoms: [bond.a1, bond.a2, ...ends.filter((x) => !x.includes('.'))], bonds: [bond.id], tone: 'accent' });
+  const names = ends.map((id) => groupName(doc, view, id));
+  const groups = names[0] === names[1] ? `the two ${names[0]} groups` : `the ${names[0]} and ${names[1]} groups`;
+  return {
+    ...base,
+    concept: 'conformation',
+    bondId: bond.id,
+    refAtoms: ends,
+    dihedral: final,
+    choices: level <= 1 ? CONFORMATIONS.filter((x) => x.id !== 'eclipsed') : CONFORMATIONS,
+    answer: [conformationOf(final)],
+    prompt: `Looking down the highlighted bond, how are ${groups} arranged?`,
+    sub: 'The camera looks straight down the bond; the Newman projection is below. Rotate to check.',
+    hidesName: false,
+  };
+}
+
+function groupName(doc: MoleculeDocument, view: MolView, id: string): string {
+  const a = doc.atoms.find((x) => x.id === id);
+  if (!a) return 'H';
+  if (a.element === 'C') return view.nbrs[view.idx(id)].length === 1 ? 'CH₃' : 'alkyl';
+  return a.element === 'O' ? 'OH' : a.element;
+}
+
+let lookTimer: ReturnType<typeof setTimeout> | undefined;
+function lookLater(view: { dir: Vec3; target?: Vec3; up?: Vec3 }) {
+  clearTimeout(lookTimer);
+  bus.emit('fit', view);
+  lookTimer = setTimeout(() => bus.emit('fit', view), 450);
+}
+
+async function buildChair(base: Pick<Problem, 'id' | 'type' | 'concept' | 'level' | 'source'>, level: number, seed: number): Promise<Problem | null> {
+  await waitForGeometry();
+  let doc = studio().doc;
+  const ring = chairRings(doc)[0];
+  if (!ring) return null;
+  let a = analyzeChair(doc, coordsNow(), ring);
+  if (!a?.isChair) return null;
+  const heavySubs = () => ring.flatMap((r) => (a!.substituents[r] ?? []).filter((x) => x.element !== 'H').map((x) => ({ ringAtom: r, ...x })));
+  // Half the time flip the ring so the answer is not always "equatorial".
+  if ((seed >>> 7) & 1) {
+    const flip = chairFlipFrames(doc, coordsNow(), ring);
+    const conf = doc.conformers.find((c) => c.id === doc.selectedConformerId) ?? doc.conformers[0];
+    if (flip && conf) {
+      studio().setConformer({ ...conf, coordinates: flip.frames[flip.frames.length - 1], converged: false, method: `${conf.method.replace(/ \(.*\)$/, '')} (ring flipped)` }, 'relaxed', '');
+      doc = studio().doc;
+      a = analyzeChair(doc, coordsNow(), ring);
+      if (!a) return null;
+    }
+  }
+  const subs = heavySubs();
+  if (!subs.length) return null;
+  const s = pick(subs, seed >>> 9);
+  // Side view: camera in the ring's mean plane, ring normal up.
+  const c = coordsNow();
+  const p = c[s.ringAtom];
+  if (p) {
+    let f = v3.sub(p, a.centre);
+    f = v3.norm(v3.sub(f, v3.scale(a.normal, v3.dot(f, a.normal))));
+    const side = v3.norm(v3.cross(a.normal, f));
+    const el = (15 * Math.PI) / 180;
+    lookLater({ dir: v3.add(v3.scale(side, Math.cos(el)), v3.scale(a.normal, Math.sin(el))), up: a.normal });
+  }
+  hl({ id: 'practice:target', atoms: [s.key, s.ringAtom], bonds: doc.bonds.filter((b) => (b.a1 === s.key && b.a2 === s.ringAtom) || (b.a2 === s.key && b.a1 === s.ringAtom)).map((b) => b.id), tone: 'accent', pulse: true });
+  const what = s.element === 'C' ? 'carbon substituent' : s.element === 'O' ? 'OH group' : s.element;
+  return {
+    ...base,
+    concept: 'conformation',
+    chair: { ring, ringAtom: s.ringAtom, sub: s.key, element: s.element },
+    choices: [{ id: 'axial', label: 'axial' }, { id: 'equatorial', label: 'equatorial' }],
+    answer: [s.position],
+    prompt: `In this chair, is the highlighted ${what} axial or equatorial?`,
+    sub: level >= 3 ? 'Then ask yourself: is this the more stable chair?' : 'Axial bonds run parallel to the ring’s axis; equatorial ones point out around the ring’s equator.',
+    hidesName: false,
+  };
 }
 
 // --- Name the structure --------------------------------------------------------------------
