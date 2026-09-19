@@ -15,6 +15,8 @@ export interface SearchState {
   result: ResolveResponse | null;
   cards: Array<{ candidate: ResolveCandidate; svg: string; label: string; how?: string }>;
   error: string | null;
+  /** A non-blocking note after a successful lookup ("listed as a synonym of…", "did you mean…"). */
+  note: string | null;
   set: (p: Partial<SearchState>) => void;
 }
 
@@ -24,6 +26,7 @@ export const useSearch = create<SearchState>((set) => ({
   result: null,
   cards: [],
   error: null,
+  note: null,
   set: (p) => set(p),
 }));
 
@@ -93,7 +96,7 @@ export async function resolveQuery(query: string): Promise<void> {
   const q = query.trim();
   if (!q) return;
   const search = useSearch.getState();
-  search.set({ query: q, busy: true, error: null, cards: [], result: null });
+  search.set({ query: q, busy: true, error: null, note: null, cards: [], result: null });
   if (!isOnline()) {
     const ok = await offlineResolve(q);
     search.set({ busy: false, error: ok ? null : 'You are offline. Names need the naming service; SMILES, molfiles and recent molecules still work.' });
@@ -112,6 +115,14 @@ export async function resolveQuery(query: string): Promise<void> {
     track('input_name_resolved', { kind: res.input.interpretedAs.join(',') });
     const c = res.candidates[0];
     await loadCandidate(c, res.input.normalized);
+    if (res.synonymOf || res.suggestions?.length) {
+      search.set({
+        result: res,
+        note: res.synonymOf
+          ? `“${q}” is listed in PubChem as a name for ${res.synonymOf} — it is not a systematic name.`
+          : `“${q}” was read as ${c.pubchemTitle ?? c.iupacName ?? 'this structure'}.`,
+      });
+    }
     if (res.input.changes.length) studio().notify({ kind: 'info', text: `Input normalized: ${res.input.changes.join('; ')}.` }, 6000);
     if (!c.stereo.complete) {
       studio().notify({ kind: 'info', text: 'Stereochemistry is not specified in this input; the model shows one arrangement and the name leaves it open.' }, 7000);
@@ -147,7 +158,9 @@ export async function resolveQuery(query: string): Promise<void> {
     search.set({ cards });
   } else {
     track('input_name_failed', {});
-    search.set({ error: res.opsin?.message ? `Not recognised: ${res.opsin.message}` : 'Not recognised as a name, formula, SMILES, InChI, CAS or CID.' });
+    // OPSIN's parser messages are for chemists debugging names; say it plainly (spec §10).
+    const stuck = res.opsin?.message?.match(/not understandable in the context it was used: (.+?)\s*$/)?.[1];
+    search.set({ error: `“${q.trim()}” isn't a name, formula, SMILES, InChI, CAS or CID that Orbital recognises${stuck && stuck !== q.trim() ? ` — the name parser got stuck at “${stuck}”` : ''}. Check the spelling, hyphens and locants.` });
   }
 }
 

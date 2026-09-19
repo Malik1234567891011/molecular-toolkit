@@ -75,6 +75,8 @@ export interface ResolveResponse {
   candidates: ResolveCandidate[];
   agreement: string | null;
   suggestions: Array<{ name: string; source: string }>;
+  /** Set when the input matched only a PubChem synonym of this title (not a systematic parse). */
+  synonymOf?: string | null;
   opsin: { status: string; message: string; flags: string[] } | null;
   pubchem: string;
   warnings: string[];

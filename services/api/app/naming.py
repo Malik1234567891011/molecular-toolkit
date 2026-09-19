@@ -232,12 +232,22 @@ async def resolve(query: str) -> dict[str, Any]:
             r = await opsin.parse(v)
             if r.ok and v not in [s["name"] for s in suggestions]:
                 suggestions.append({"name": v, "source": "spelling"})
-        try:
-            for term in await pubchem.autocomplete(normalized, 6):
-                if term.lower() != normalized.lower():
-                    suggestions.append({"name": term, "source": "pubchem"})
-        except pubchem.PubChemUnavailable:
-            pass
+        for sug in await _spelling_suggestions(normalized):
+            if sug not in [x["name"] for x in suggestions]:
+                suggestions.append({"name": sug, "source": "pubchem"})
+    # Resolved only through a PubChem synonym (not OPSIN, not the compound's own title): say so,
+    # and offer close spellings — "isopropanal" is filed under acetone, the student meant isopropanol.
+    synonym_of = None
+    if len(merged) == 1 and "name" in kinds and len(normalized) >= 5:
+        title = (merged[0].get("pubchemTitle") or "").strip()
+        if title and title.lower() != normalized.lower():
+            if merged[0]["sources"] == ["pubchem"]:
+                synonym_of = title
+            # One edit from a different compound's name ("isopropanal" → isopropanol): offer it
+            # without replacing what was typed (spec §9.1 "Did you mean propan-2-ol?").
+            for sug in await _spelling_suggestions(normalized, max_distance=1):
+                if sug.lower() != title.lower() and sug not in [x["name"] for x in suggestions]:
+                    suggestions.append({"name": sug, "source": "spelling"})
     status = "resolved" if len(merged) == 1 else "ambiguous" if len(merged) > 1 else "failed"
     if "formula" in kinds and merged:
         status = "ambiguous" if len(merged) > 1 else "resolved"
@@ -254,6 +264,7 @@ async def resolve(query: str) -> dict[str, Any]:
         "candidates": merged,
         "agreement": agreement,
         "suggestions": suggestions[:8],
+        "synonymOf": synonym_of,
         "opsin": opsin_info,
         "pubchem": pubchem_state,
         "warnings": warnings,
@@ -274,6 +285,42 @@ async def verify_name(target, name: str) -> dict[str, Any]:
     cmp = chemistry.same_structure(target, mol)
     status = "verified" if cmp["identical"] else "stereo_mismatch" if cmp["sameConnectivity"] else "mismatch"
     return {"name": name, "status": status, "parsedSmiles": cmp["b"]["canonicalSmiles"], "flags": r.flags}
+
+
+async def _spelling_suggestions(normalized: str, max_distance: int | None = None) -> list[str]:
+    """Close spellings from PubChem. Its autocomplete is prefix-based, so a typo ("caffiene")
+    finds neighbours rather than the word: ask with short prefixes too, split multi-word terms
+    ("Ibuprofen lysinate") into words, and keep only terms a couple of edits away."""
+    target = normalized.lower()
+    pool: dict[str, str] = {}
+    prefixes = [p for p in dict.fromkeys([normalized, normalized[:5], normalized[:4], normalized[:3]]) if len(p) >= 3 and (len(p) >= 4 or len(normalized) >= 5)]
+    results = await asyncio.gather(*(pubchem.autocomplete(p, 12) for p in prefixes), return_exceptions=True)
+    for terms in results:
+        if isinstance(terms, BaseException):
+            continue
+        for term in terms:
+            pool.setdefault(term.lower(), term)
+            for word in re.findall(r"[A-Za-z]{4,}", term):
+                pool.setdefault(word.lower(), word.lower())
+    limit = max_distance if max_distance is not None else max(2, len(target) // 4)
+    close = sorted((d, t) for t in pool if t != target and (d := _edit_distance(t, target)) <= limit)
+    return [pool[t] for _, t in close[:4]]
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Damerau–Levenshtein (optimal string alignment): a swapped pair of letters is one edit."""
+    d = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        d[i][0] = i
+    for j in range(len(b) + 1):
+        d[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[len(a)][len(b)]
 
 
 def _plausible_synonym(s: str) -> bool:

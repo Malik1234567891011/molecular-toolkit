@@ -30,6 +30,7 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
   const onChange = (v: string) => {
     setValue(v);
     setActive(-1);
+    if (useSearch.getState().error || useSearch.getState().note) useSearch.getState().set({ error: null, note: null });
     clearTimeout(timer.current);
     const ticket = ++seq.current;
     if (v.trim().length < 3 || /[=#()[\]@\\/]/.test(v)) {
@@ -141,9 +142,9 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
         </ul>
       ) : null}
       {search.error && (
-        <div className="fade-up mt-2 flex items-start gap-2 rounded-lg border border-border bg-panel-raised p-2 text-[13px] text-text-2" role="alert">
+        <div className={`glass fade-up z-40 flex items-start gap-2 rounded-xl p-2.5 text-[13px] text-text-2 ${big ? 'mt-2' : 'absolute left-0 top-full mt-1.5 w-[min(420px,calc(100vw-1.5rem))]'}`} role="alert">
           <I.Info size={15} className="mt-0.5 shrink-0" />
-          <div>
+          <div className="min-w-0 flex-1">
             {search.error}
             {search.result?.suggestions?.length ? (
               <div className="mt-1">
@@ -160,6 +161,30 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
               </div>
             ) : null}
           </div>
+          <button onClick={() => useSearch.getState().set({ error: null })} className="shrink-0 text-text-3 hover:text-text" aria-label="Dismiss">
+            <I.X size={14} />
+          </button>
+        </div>
+      )}
+      {search.note && !search.error && (
+        <div className={`glass fade-up z-40 flex items-start gap-2 rounded-xl p-2.5 text-[13px] text-text-2 ${big ? 'mt-2' : 'absolute left-0 top-full mt-1.5 w-[min(420px,calc(100vw-1.5rem))]'}`} role="status" data-testid="search-note">
+          <I.Info size={15} className="mt-0.5 shrink-0 text-accent-strong" />
+          <div className="min-w-0 flex-1">
+            {search.note}
+            {search.result?.suggestions?.length ? (
+              <div className="mt-1">
+                Did you mean{' '}
+                {search.result.suggestions.slice(0, 3).map((s, k) => (
+                  <span key={s.name}>
+                    {k > 0 && ', '}
+                    <button className="font-medium text-accent-strong underline-offset-2 hover:underline" onClick={() => void submit(s.name)}>{s.name}</button>
+                  </span>
+                ))}
+                ?
+              </div>
+            ) : null}
+          </div>
+          <button onClick={() => useSearch.getState().set({ note: null })} className="shrink-0 text-text-3 hover:text-text" aria-label="Dismiss"><I.X size={14} /></button>
         </div>
       )}
       {search.cards.length > 0 && (
