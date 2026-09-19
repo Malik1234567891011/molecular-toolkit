@@ -2,6 +2,7 @@
 import { MolView, dihedralDeg, rotateFragment, sideOfBond, atomicNumber, type AtomId, type BondId, type Vec3 } from '@orbital/chem';
 import { studio, useStudio } from './store';
 import { call } from './worker';
+import { instantGeometry } from './events';
 
 /** Reference atoms for the dihedral of a bond: heaviest substituent on each end (H if none). */
 export function dihedralFor(bondId: BondId): [AtomId, AtomId, AtomId, AtomId] | null {
@@ -26,7 +27,21 @@ export function currentDihedral(dih: [string, string, string, string]): number |
   return dihedralDeg(p[0] as Vec3, p[1] as Vec3, p[2] as Vec3, p[3] as Vec3);
 }
 
-/** Rotate the smaller fragment about a bond by `delta` degrees (graph identity unchanged). */
+/** Which end of a bond moves when it is rotated (the smaller fragment's end). */
+export function rotationEnds(bondId: BondId): { fixed: AtomId; moving: AtomId } | null {
+  const doc = studio().doc;
+  const b = doc.bonds.find((x) => x.id === bondId);
+  if (!b) return null;
+  const sideB = sideOfBond(doc, b.a1, b.a2);
+  const sideA = sideOfBond(doc, b.a2, b.a1);
+  if (!sideA || !sideB) return null;
+  return sideB.length <= sideA.length ? { fixed: b.a1, moving: b.a2 } : { fixed: b.a2, moving: b.a1 };
+}
+
+/**
+ * Rotate the smaller fragment about a bond (graph identity unchanged). `delta` is the change of
+ * the bond's dihedral; equivalently, the moving fragment turns by `delta` about fixed → moving.
+ */
 export function rotateBond(bondId: BondId, delta: number): void {
   const s = studio();
   const doc = s.doc;
@@ -40,7 +55,9 @@ export function rotateBond(bondId: BondId, delta: number): void {
   const side = moveB ? sideB : sideA;
   const from = conf.coordinates[moveB ? b.a1 : b.a2];
   const to = conf.coordinates[moveB ? b.a2 : b.a1];
-  const coords = rotateFragment(conf.coordinates, side, from, to, moveB ? delta : -delta);
+  // The axis runs toward the moving side, so +delta always increases the dihedral.
+  const coords = rotateFragment(conf.coordinates, side, from, to, delta);
+  instantGeometry();
   s.setConformer({ ...conf, coordinates: coords, converged: false, method: `${conf.method.replace(/ \(rotated.*\)$/, '')} (rotated by hand, not re-minimized)` }, 'relaxed', 'Bond rotated by hand — press Relax to re-minimize.');
   scheduleLiveEnergy();
 }

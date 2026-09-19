@@ -211,13 +211,23 @@ function energy(doc: MoleculeDocument, coords: Record<string, Vec3>): number {
 
 /** Fresh conformer honouring stored stereo, checked against the graph (retries other seeds). */
 function freshConformer(doc: MoleculeDocument, previous?: Record<string, Vec3>, seed0?: number): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {
-  let last: ReturnType<typeof freshConformerOnce> | null = null;
-  for (const seed of [seed0 ?? 42, 7, 1234, 99]) {
-    last = freshConformerOnce(doc, previous, seed);
-    const wrong = stereoMismatches(doc, last.coords);
-    if (!wrong.centres.length && !wrong.bonds.length) return last;
+  // Several starts, keep the lowest MMFF energy (e.g. methyl equatorial, anti chains) unless a
+  // specific seed was requested. Every candidate must match the stored R/S and E/Z.
+  const want = seed0 !== undefined ? 1 : doc.atoms.length <= 40 ? 4 : 1;
+  const valid: Array<ReturnType<typeof freshConformerOnce>> = [];
+  for (const seed of [seed0 ?? 42, 7, 1234, 99, 2024, 31337, 5]) {
+    let c: ReturnType<typeof freshConformerOnce>;
+    try {
+      c = freshConformerOnce(doc, previous, seed);
+    } catch {
+      continue;
+    }
+    const wrong = stereoMismatches(doc, c.coords);
+    if (!wrong.centres.length && !wrong.bonds.length) valid.push(c);
+    if (valid.length >= want) break;
   }
-  throw new Error('no conformer matched the stored stereochemistry');
+  if (!valid.length) throw new Error('no conformer matched the stored stereochemistry');
+  return valid.reduce((a, b) => (b.energy < a.energy - 1e-6 ? b : a));
 }
 
 function freshConformerOnce(doc: MoleculeDocument, previous: Record<string, Vec3> | undefined, seed: number): { coords: Record<string, Vec3>; energy: number; converged: boolean; method: string } {

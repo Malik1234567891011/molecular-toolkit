@@ -7,6 +7,7 @@ import { warmUp } from '@/lib/worker';
 import { useApplyTheme } from '@/lib/useTheme';
 import { track } from '@/lib/analytics';
 import { bus } from '@/lib/events';
+import { loadStructure, resolveQuery } from '@/lib/actions';
 import { TopBar } from './TopBar';
 import { ElementRail } from './ElementRail';
 import { CanvasArea } from './CanvasArea';
@@ -33,6 +34,7 @@ export function Studio() {
     // Expose state for automated checks (read state, not screens).
     (window as unknown as { __orbital: unknown; __orbitalBus: unknown }).__orbital = useStudio;
     (window as unknown as { __orbitalBus: unknown }).__orbitalBus = bus;
+    (window as unknown as { __orbitalActions: unknown }).__orbitalActions = { resolveQuery, loadStructure };
   }, []);
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

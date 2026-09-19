@@ -4,7 +4,7 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStudio } from '@/lib/store';
-import { computeScan, currentDihedral, rotateBond } from '@/lib/conformer';
+import { computeScan, currentDihedral, rotateBond, rotationEnds } from '@/lib/conformer';
 import { displayPositions } from './MoleculeMesh';
 
 /** Arc handle around the active rotatable bond; drag it to change the dihedral (spec §7 Conformer mode). */
@@ -52,9 +52,12 @@ export function RotationHandle({ onInteract }: { onInteract: (v: boolean) => voi
         let d = ang - last.current;
         if (d > 180) d -= 360;
         if (d < -180) d += 360;
-        // Sign: rotation sense depends on whether the bond axis points toward the viewer.
-        const a = displayPositions.get(bond!.a1)!;
-        const b = displayPositions.get(bond!.a2)!;
+        // The moving fragment follows the finger: its sense depends on whether the
+        // fixed → moving axis points toward the viewer.
+        const ends = rotationEnds(bondId);
+        if (!ends) return;
+        const a = displayPositions.get(ends.fixed)!;
+        const b = displayPositions.get(ends.moving)!;
         const axis = b.clone().sub(a).normalize();
         const view = camera.position.clone().sub(group.current!.position).normalize();
         const sign = axis.dot(view) > 0 ? -1 : 1;

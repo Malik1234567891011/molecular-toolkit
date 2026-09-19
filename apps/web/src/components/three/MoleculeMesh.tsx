@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
+import { morphControl } from '@/lib/events';
 import type { Vec3 } from '@orbital/chem';
 import { useStudio } from '@/lib/store';
 import { atomColor, subColor } from '@/lib/colors';
@@ -95,7 +96,7 @@ export function MoleculeMesh({ handlers, ghost }: { handlers: PickHandlers; ghos
       }
     }
     const newcomers = scene.atoms.some((a) => !displayPositions.has(a.key));
-    anim.current = { from, to, t0: performance.now(), dur: reduced ? 0 : newcomers ? 180 : 380 };
+    anim.current = { from, to, t0: performance.now(), dur: reduced || performance.now() < morphControl.instantUntil ? 0 : newcomers ? 180 : 380 };
     for (const k of [...displayPositions.keys()]) if (!to.has(k)) displayPositions.delete(k);
     dirty.current = true;
   }, [target, scene, reduced]);

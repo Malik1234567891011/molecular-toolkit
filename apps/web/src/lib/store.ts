@@ -127,7 +127,7 @@ function touchedAtoms(before: MoleculeDocument, after: MoleculeDocument, created
   return [...out];
 }
 
-export const useStudio = create<StudioState>((set, get) => ({
+const createStudio = () => create<StudioState>((set, get) => ({
   doc: emptyDocument(),
   version: 0,
   past: [],
@@ -269,6 +269,10 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   dismiss: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
 }));
+
+// One store per page, even when Fast Refresh re-evaluates this module during development.
+const g = globalThis as unknown as { __orbitalStudio?: ReturnType<typeof createStudio> };
+export const useStudio = g.__orbitalStudio ?? (g.__orbitalStudio = createStudio());
 
 /** Non-hook accessor for event handlers and async pipelines. */
 export const studio = () => useStudio.getState();

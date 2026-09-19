@@ -216,7 +216,7 @@ async function verify(analysis: Analysis, version: number, cacheKey: string): Pr
     const details = db.synonymDetails ?? (db.synonyms ?? []).map((name) => ({ name, checked: false, kind: 'common' as const }));
     const NOTE = {
       'cas-index': 'CAS index name (inverted), parses to this structure',
-      systematic: 'PubChem synonym; parses to this structure but is not the preferred form',
+      systematic: 'PubChem synonym; OPSIN parses it to this exact structure',
       common: 'PubChem synonym (trivial or trade name, not structure-checked)',
     };
     for (const syn of details.slice(0, 6)) {

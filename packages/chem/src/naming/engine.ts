@@ -657,7 +657,8 @@ const COMMON_SUBS: Record<string, string> = {
   'prop-1-en-2-yl': 'isopropenyl', '1-methylethenyl': 'isopropenyl', 'prop-2-yn-1-yl': 'propargyl', '2-propynyl': 'propargyl',
   'phenylmethyl': 'benzyl', 'methylidene': 'methylene',
 };
-const PIN_SUBS: Record<string, string> = { ethanoyl: 'acetyl', methanoyl: 'formyl', phenylmethyl: 'benzyl' };
+// P-29.6.2.3: unsubstituted tert-butyl is a retained preferred prefix (isopropyl is not).
+const PIN_SUBS: Record<string, string> = { ethanoyl: 'acetyl', methanoyl: 'formyl', phenylmethyl: 'benzyl', '2-methylpropan-2-yl': 'tert-butyl' };
 
 function carbonSubstituent(ctx: Ctx, atoms: Set<number>, root: number, from: number, suffix: FreeSuffix, exclude: number[], depth: number, extraAtoms: number[] = []): SubName {
   const r = nameWithTask(ctx, { atoms, principal: null, free: { atom: root, from, suffix, exclude }, depth });

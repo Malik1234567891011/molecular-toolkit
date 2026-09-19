@@ -15,8 +15,14 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
   const [listening, setListening] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const seq = useRef(0);
 
   useEffect(() => bus.on('focus-search', () => input.current?.focus()), []);
+  // Keep anything typed before hydration finished.
+  useEffect(() => {
+    const early = input.current?.value;
+    if (early) setValue(early);
+  }, []);
   useEffect(() => {
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
@@ -25,21 +31,26 @@ export function SearchBox({ autoFocus, big }: { autoFocus?: boolean; big?: boole
     setValue(v);
     setActive(-1);
     clearTimeout(timer.current);
+    const ticket = ++seq.current;
     if (v.trim().length < 3 || /[=#()[\]@\\/]/.test(v)) {
       setSuggest([]);
       return;
     }
     timer.current = setTimeout(async () => {
       const r = await tryApi<{ terms: string[] }>(`/names/autocomplete?q=${encodeURIComponent(v.trim())}`, undefined, { timeout: 4000 });
-      setSuggest((r?.terms ?? []).slice(0, 6));
+      // A submit (or newer keystroke) since this request makes it stale.
+      if (ticket === seq.current) setSuggest((r?.terms ?? []).slice(0, 6));
     }, 180);
   };
 
   const submit = async (q?: string) => {
     const query = (q ?? value).trim();
     if (!query) return;
+    clearTimeout(timer.current);
+    seq.current++;
     setSuggest([]);
     setValue(query);
+    input.current?.blur();
     await resolveQuery(query);
     bus.emit('fit');
   };

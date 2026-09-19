@@ -17,3 +17,4 @@ export * from './geometry3d.ts';
 export * from './isomorphism.ts';
 export * as naming from './naming/index.ts';
 export * from './kekule.ts';
+export * from './chair.ts';

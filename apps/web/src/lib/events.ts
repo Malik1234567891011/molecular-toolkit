@@ -23,3 +23,9 @@ export function haptic(kind: 'snap' | 'boundary' | 'success'): void {
     /* ignore */
   }
 }
+
+/** Frame-by-frame geometry (bond drags, ring flips) must not be smoothed by the relax morph. */
+export const morphControl = { instantUntil: 0 };
+export function instantGeometry(ms = 120): void {
+  morphControl.instantUntil = performance.now() + ms;
+}

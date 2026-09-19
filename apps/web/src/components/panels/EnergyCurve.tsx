@@ -95,12 +95,12 @@ export function EnergyCurve({
           </div>
         )}
       </div>
-      <figcaption className="mt-0.5 flex items-center justify-between text-[10.5px] text-text-3">
-        <span>
-          {xLabel} · relative force-field energy ({unit}) — lower is more stable
+      <figcaption className="mt-1 flex items-start justify-between gap-2 text-[10.5px] leading-snug text-text-3">
+        <span className="min-w-0">
+          {caption ?? `${xLabel} · relative force-field energy (${unit}) — lower is more stable`}
         </span>
-        <button className="underline-offset-2 hover:text-text hover:underline" onClick={() => setTable((t) => !t)}>
-          {table ? 'hide table' : 'table'}
+        <button className="shrink-0 rounded border border-border px-1.5 py-px hover:border-border-strong hover:text-text" onClick={() => setTable((t) => !t)} aria-expanded={table}>
+          {table ? 'Hide table' : 'Table'}
         </button>
       </figcaption>
       {table && (

@@ -44,7 +44,7 @@ function CameraRig() {
       let target = new THREE.Vector3(...center);
       let dir = camera.position.clone().sub(controls?.target ?? new THREE.Vector3()).normalize();
       if (dir.lengthSq() < 0.5) dir.set(0, 0, 1);
-      const view = typeof payload === 'object' && payload ? (payload as { dir: Vec3; target?: Vec3 }) : null;
+      const view = typeof payload === 'object' && payload ? (payload as { dir: Vec3; target?: Vec3; up?: Vec3 }) : null;
       if (view?.dir) {
         // Look along a chemical axis, e.g. with the lowest-priority ligand pointing away.
         dir = new THREE.Vector3(...view.dir).normalize();
@@ -53,8 +53,11 @@ function CameraRig() {
           dist *= 1 + t.distanceTo(target) / Math.max(radius, 1);
           target = t;
         }
-        camera.up.set(0, 1, 0);
-        if (Math.abs(dir.y) > 0.95) camera.up.set(0, 0, 1);
+        if (view.up) camera.up.set(...view.up).normalize();
+        else {
+          camera.up.set(0, 1, 0);
+          if (Math.abs(dir.y) > 0.95) camera.up.set(0, 0, 1);
+        }
       }
       if (payload === 'orient' && conf) {
         // Look along the axis of least spread so flat molecules face the viewer.

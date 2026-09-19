@@ -8,6 +8,7 @@ import unicodedata
 from typing import Any
 
 import httpx
+from rdkit import Chem
 
 from . import chemistry, config, pubchem
 from .chemistry import ChemError
@@ -290,16 +291,23 @@ async def vet_synonyms(target, raw: list[str], exclude: list[str], limit: int = 
     synonym that OPSIN can parse must round-trip to this exact structure; names OPSIN cannot
     parse (trade and trivial names) are kept but marked as not structure-checked."""
     seen = {e.strip().rstrip(".").lower() for e in exclude if e}
+    # A structure with defined stereo only accepts synonyms whose stereo we could check;
+    # racemate / relative-configuration labels (±, rac, R*, threo…) describe something else.
+    specified = any(True for _ in Chem.FindMolChiralCenters(target, includeUnassigned=False, useLegacyImplementation=False)) or any(
+        b.GetStereo() != Chem.BondStereo.STEREONONE for b in target.GetBonds())
+    stereo_words = re.compile(r"\(\s*[RSEZ][,)*\s]|\b[RSEZ]\*|\(\+|\(-\)|±|\+/-|A\+/-|\brac\b|\bthreo\b|\berythro\b|\bcis\b|\btrans\b|\bmeso\b|\bDL\b|\b[DL]-", re.I)
     out: list[dict[str, Any]] = []
     for s in raw:
         name = s.strip().rstrip(".").strip()
         key = name.lower()
-        if key in seen or not _plausible_synonym(name):
+        if key in seen or not _plausible_synonym(name) or "A+/-" in name:
             continue
         seen.add(key)
         v = await verify_name(target, name)
         if v["status"] in ("mismatch", "stereo_mismatch"):
             continue  # a wrong name deposited against this record — never shown
+        if specified and v["status"] != "verified" and stereo_words.search(name):
+            continue
         cas_index = bool(re.search(r", .*-$|^[A-Z][a-z]+, ", name))
         out.append({
             "name": name,
