@@ -19,11 +19,14 @@ import { Coach } from './Coach';
 import { ShareDialog } from './ShareDialog';
 import { CommandPalette } from './CommandPalette';
 import { ScanDialog } from './ScanDialog';
+import { Tour } from './Tour';
+import { watchVerifiedChime } from '@/lib/sound';
 
 export function Studio() {
   useApplyTheme();
   const landing = useStudio((s) => s.landing);
   const [ready, setReady] = useState(false);
+  useEffect(() => watchVerifiedChime(), []);
   useEffect(() => {
     warmUp();
     void (async () => {
@@ -99,6 +102,7 @@ export function Studio() {
       <ShareDialog />
       <CommandPalette />
       <ScanDialog />
+      <Tour />
     </div>
   );
 }

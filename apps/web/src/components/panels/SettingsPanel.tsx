@@ -90,6 +90,7 @@ export function SettingsPanel() {
           <DeleteLocal />
         </div>
         <button onClick={() => set({ tourSeen: false })} className="text-[12px] text-accent-strong hover:underline">Show the first-run tips again</button>
+        <button onClick={() => void import('@/lib/tour').then((t) => t.startTour())} className="ml-3 text-[12px] text-accent-strong hover:underline" data-testid="settings-tour">Take the 60-second tour</button>
       </Block>
       <Block title="About">
         <dl className="mono space-y-0.5 text-[11px] text-text-3">

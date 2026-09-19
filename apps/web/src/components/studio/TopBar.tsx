@@ -16,6 +16,7 @@ function Seg<T extends string>({ value, options, onChange, label }: { value: T; 
           role="radio"
           aria-checked={value === o.v}
           title={o.title ?? o.label}
+          data-tour={`${label.toLowerCase()}-${o.v}`}
           onClick={() => onChange(o.v)}
           className={`flex h-7 items-center gap-1 rounded-md px-2 text-[12.5px] font-medium transition ${value === o.v ? 'bg-accent text-accent-ink shadow-sm' : 'text-text-2 hover:text-text'}`}
         >
@@ -37,6 +38,7 @@ export function PanelButton({ panel, icon, label, kbd }: { panel: SidePanel; ico
       }}
       aria-pressed={active}
       title={kbd ? `${label} (${kbd})` : label}
+      data-tour={`panel-${panel}`}
       className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium transition ${active ? 'bg-accent-soft text-accent-strong' : 'text-text-2 hover:bg-panel-raised hover:text-text'}`}
     >
       {icon}

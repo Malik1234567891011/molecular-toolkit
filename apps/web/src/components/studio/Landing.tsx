@@ -7,6 +7,7 @@ import { EXAMPLES, resolveQuery, startWithCarbon, useSearch } from '@/lib/action
 import { bus } from '@/lib/events';
 import { useResolvedTheme } from '@/lib/useTheme';
 import { SearchBox } from './SearchBox';
+import { startTour } from '@/lib/tour';
 import { I } from '../ui/icons';
 
 const Viewer = dynamic(() => import('../three/Viewer').then((m) => m.Viewer), { ssr: false });
@@ -73,7 +74,10 @@ export function Landing() {
             Back to my molecule
           </button>
         )}
-        <p className="mt-8 text-[11.5px] text-text-3">No account needed · your work saves on this device · free</p>
+        <button onClick={startTour} className="mt-5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] text-accent-strong hover:bg-accent-soft" data-testid="start-tour">
+          <I.Sparkle size={14} /> New here? Take the 60-second tour
+        </button>
+        <p className="mt-6 text-[11.5px] text-text-3">No account needed · your work saves on this device · free</p>
       </div>
     </div>
   );
