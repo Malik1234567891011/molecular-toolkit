@@ -59,6 +59,14 @@ const scenes = {
     await shot(page, '01-landing');
     await ctx.close();
   },
+  async '01b-guide'() {
+    const { ctx, page } = await fresh();
+    await page.goto(BASE + '/?guide');
+    await page.waitForSelector('[data-testid=guide]');
+    await page.waitForTimeout(600);
+    await shot(page, '01b-guide');
+    await ctx.close();
+  },
   async '02-first-build'() {
     const { ctx, page } = await fresh();
     await page.evaluate(async () => { localStorage.clear(); });

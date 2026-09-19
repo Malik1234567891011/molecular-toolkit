@@ -488,7 +488,7 @@ export function Guide() {
         </nav>
 
         <div ref={bodyRef} className="scroll-thin min-h-0 flex-1 overflow-y-auto" data-testid="guide-body">
-          <div className="mx-auto max-w-[760px] px-4 pb-24 pt-6 sm:px-8">
+          <div className="mx-auto max-w-[820px] px-4 pb-24 pt-6 sm:px-8 lg:px-12">
             <section aria-labelledby="guide-quick" className="rounded-2xl border border-accent/40 bg-accent-soft/40 p-4 sm:p-5">
               <h2 id="guide-quick" className="text-[15px] font-semibold">The short version</h2>
               <p className="mt-1 text-[13px] text-text-2">Orbital is a place to see molecules in 3D, learn why they’re named what they’re named, and practise until it clicks. Most of the time you’ll do these four things:</p>
