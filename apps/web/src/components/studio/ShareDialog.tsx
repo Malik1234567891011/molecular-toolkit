@@ -93,7 +93,14 @@ function Qr({ text, size = 132 }: { text: string; size?: number }) {
       setSvg(toSvgSource(code, { on: '#0b0e14', off: '#ffffff', pad: 2, width: size, height: size, xmlDeclaration: false }));
     });
   }, [text, size]);
-  return <div className="overflow-hidden rounded-lg bg-white p-1" style={{ width: size + 8, height: size + 8 }} dangerouslySetInnerHTML={{ __html: svg }} aria-label="QR code" role="img" />;
+  return <div className="shrink-0 overflow-hidden rounded-lg bg-white p-1" style={{ width: size + 8, height: size + 8 }} dangerouslySetInnerHTML={{ __html: svg }} aria-label="QR code" role="img" />;
+}
+
+/** A QR code for a localhost URL can never open on a phone; say so rather than let it fail. */
+function LocalOnlyNote() {
+  const local = typeof location !== 'undefined' && ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+  if (!local) return null;
+  return <p className="text-[12px] leading-snug text-amber">This link points at <span className="mono">localhost</span>, which only this computer can open. To use it on a phone, open Orbital from your computer&apos;s network address (or deploy it) and share again.</p>;
 }
 
 function Copy({ value, label }: { value: string; label: string }) {
@@ -126,6 +133,7 @@ function SharePane() {
             An <b className="font-medium text-text">unlisted, read-only snapshot</b> of {name ? <span className="nomen">{name}</span> : 'this molecule'}. Later edits don&apos;t change it. Anyone with the link can open it in 3D, in AR, or in their own studio.
           </p>
           <Copy value={link.url} label="Share link" />
+          <LocalOnlyNote />
         </div>
       </div>
       <div className="space-y-1.5">
@@ -263,7 +271,10 @@ function ArPane({ onWebXR }: { onWebXR: () => void }) {
       {platform === 'desktop' && (
         <div className="flex items-center gap-3">
           {link ? <Qr text={`${link.url}?ar=1`} /> : <div className="h-[140px] w-[140px] animate-pulse rounded-lg bg-panel-raised" />}
-          <p className="text-[13px] leading-relaxed text-text-2">This computer can&apos;t do AR. Scan the code with your phone&apos;s camera — the molecule opens there, ready to place on your desk.</p>
+          <div className="min-w-0 space-y-2">
+            <p className="text-[13px] leading-relaxed text-text-2">This computer can&apos;t do AR. Scan the code with your phone&apos;s camera — the molecule opens there, ready to place on your desk.</p>
+            <LocalOnlyNote />
+          </div>
         </div>
       )}
     </div>
