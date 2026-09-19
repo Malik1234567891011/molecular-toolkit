@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = ROOT.parents[1]
 
 
 def _load_dotenv() -> None:
