@@ -98,7 +98,15 @@ function StatusStrip() {
   const mode = useStudio((s) => s.mode3d);
   const view = useStudio((s) => s.view);
   const hidden = usePracticeHidesName();
-  if (!doc.atoms.length) return null;
+  if (!doc.atoms.length) {
+    // An empty canvas teaches its first move (spec §5: empty states teach).
+    return (
+      <div className="pointer-events-none flex items-center gap-2 rounded-2xl border border-border bg-panel px-3 py-1 text-[12px] text-text-2 backdrop-blur sm:whitespace-nowrap sm:rounded-full" role="status">
+        <I.Info size={13} className="text-accent-strong" />
+        {view === '2d' ? 'Click to place a carbon · drag to draw a bond · pick a ring from the rail' : 'Pick an element on the left and click the canvas to place an atom'}
+      </div>
+    );
+  }
   const errors = a?.validation.filter((v) => v.severity === 'error') ?? [];
   const warns = a?.validation.filter((v) => v.severity === 'warning') ?? [];
   const hint =
@@ -110,7 +118,7 @@ function StatusStrip() {
           ? 'Click 2 atoms for a distance, 3 for an angle, 4 for a dihedral'
           : 'Drag from an atom to draw a bond · click a bond to change its order';
   return (
-    <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-panel px-3 py-1 text-[12px] text-text-2 backdrop-blur" role="status">
+    <div className="pointer-events-auto flex max-w-full items-center gap-3 whitespace-nowrap rounded-full border border-border bg-panel px-3 py-1 text-[12px] text-text-2 backdrop-blur" role="status">
       {errors.length > 0 ? (
         <span className="flex items-center gap-1 text-danger"><I.Alert size={13} /> {errors.length} valence problem{errors.length > 1 ? 's' : ''}</span>
       ) : warns.length > 0 ? (
@@ -118,9 +126,9 @@ function StatusStrip() {
       ) : (
         <span className="flex items-center gap-1 text-good"><I.Check size={13} /> valid</span>
       )}
-      <span className="hidden md:inline">{hint}</span>
+      <span className="hidden min-w-0 truncate md:inline">{hint}</span>
       {a?.naming?.ok && !hidden && (
-        <button onClick={() => useStudio.setState({ panel: 'explain', explainStep: 0 })} className="flex items-center gap-1 font-medium text-accent-strong hover:underline" data-testid="explain-trigger">
+        <button onClick={() => useStudio.setState({ panel: 'explain', explainStep: 0 })} className="flex shrink-0 items-center gap-1 font-medium text-accent-strong hover:underline" data-testid="explain-trigger">
           <I.Lightbulb size={13} /> Explain name
         </button>
       )}
@@ -189,7 +197,7 @@ export function CanvasArea() {
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2">
+      <div className="pointer-events-none absolute left-1/2 top-3 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2">
         <StatusStrip />
       </div>
       <RoomCursors container={box} />

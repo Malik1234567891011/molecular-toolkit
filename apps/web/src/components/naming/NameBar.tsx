@@ -131,7 +131,7 @@ export function NameBar() {
   const provenance = primary?.provenance ?? (verification?.status === 'pending' ? 'pending' : n?.ok ? 'pending' : 'unsupported');
   return (
     <div ref={root} className="relative flex min-w-0 items-center gap-2">
-      <div className="min-w-0 truncate" data-testid="current-name" aria-live="polite">
+      <div className="min-w-0 truncate" data-testid="current-name" aria-live="polite" title={primary?.name ?? n?.name ?? undefined}>
         {useTokens ? (
           <NameTokens tokens={n!.tokens!} />
         ) : primary ? (
