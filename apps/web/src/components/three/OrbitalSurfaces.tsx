@@ -11,6 +11,9 @@ export function OrbitalSurfaces() {
   const showDipole = useOrbitals((s) => s.showDipole);
   const result = useOrbitals((s) => s.result);
   const doc = useStudio((s) => s.doc);
+  // Surfaces belong to the Orbitals panel: leaving it shows the plain model again (the result
+  // is kept, so reopening the panel brings them straight back).
+  const visible = useStudio((s) => s.panel === 'orbitals');
   const geoms = useMemo(
     () =>
       meshes.map((m) => {
@@ -35,6 +38,7 @@ export function OrbitalSurfaces() {
     const dir = d.clone().normalize().negate();
     return { c, dir, len: Math.min(4, 0.6 + mag * 0.7), mag };
   }, [showDipole, result, doc]);
+  if (!visible) return null;
   return (
     <group>
       {geoms.map(({ g, m }) =>

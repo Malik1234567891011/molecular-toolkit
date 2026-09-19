@@ -22,8 +22,8 @@ interface Frame {
 function frame(t: number, theme: 'dark' | 'light'): Frame {
   // C at the origin; leaving group along +x, nucleophile along −x.
   const u = ease(Math.min(1, Math.max(0, t)));
-  const nuX = THREE.MathUtils.lerp(-4.2, -1.43, Math.min(1, u * 1.15));
-  const lgX = THREE.MathUtils.lerp(1.94, 4.6, Math.max(0, (u - 0.35) / 0.65));
+  const nuX = THREE.MathUtils.lerp(-3.8, -1.43, Math.min(1, u * 1.15));
+  const lgX = THREE.MathUtils.lerp(1.94, 3.8, Math.max(0, (u - 0.35) / 0.65));
   // Umbrella: substituents lean toward −x (away from Br) before, toward +x after.
   const lean = THREE.MathUtils.lerp(-0.334, 0.334, u);
   const radial = Math.sqrt(1 - lean * lean);
@@ -44,9 +44,9 @@ function frame(t: number, theme: 'dark' | 'light'): Frame {
   const formed = Math.min(1, Math.max(0, (u - 0.2) / 0.6));
   const broken = Math.min(1, Math.max(0, (u - 0.35) / 0.5));
   const atoms: Frame['atoms'] = [
-    { key: 'C', el: 'C', p: C, r: 0.42, label: 'C2' },
+    { key: 'C', el: 'C', p: C, r: 0.42 },
     ...sub.map((s) => ({ key: s.key, el: s.el, p: s.p, r: s.r, label: s.label })),
-    { key: 'O', el: 'O', p: O, r: 0.4, label: u < 0.95 ? 'HO⁻' : 'OH' },
+    { key: 'O', el: 'O', p: O, r: 0.4, label: u < 0.58 ? 'HO⁻' : 'OH' },
     { key: 'OH', el: 'H', p: OH, r: 0.26 },
     { key: 'Br', el: 'Br', p: Br, r: 0.55, label: u > 0.6 ? 'Br⁻' : 'Br' },
   ];
@@ -101,7 +101,7 @@ export default function SN2Viewer({ t, theme }: { t: number; theme: 'dark' | 'li
   const f = useMemo(() => frame(t, theme), [t, theme]);
   return (
     <div className="relative h-[230px] w-full overflow-hidden rounded-xl border border-border bg-panel-raised" data-testid="sn2-3d">
-      <Canvas camera={{ position: [0.6, 2.6, 9.2], fov: 38 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+      <Canvas camera={{ position: [0.2, 2.8, 11.8], fov: 38 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
         <ambientLight intensity={0.55} />
         <directionalLight position={[4, 6, 6]} intensity={1.5} />
         <directionalLight position={[-5, -2, 3]} intensity={0.4} color="#b8c4ff" />
@@ -125,6 +125,7 @@ export default function SN2Viewer({ t, theme }: { t: number; theme: 'dark' | 'li
       </Canvas>
       <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-panel px-2 py-0.5 text-[11.5px]">{f.stage}</div>
       <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-panel px-2 py-0.5 text-[12px] font-semibold italic text-accent-strong">C2: {f.descriptor}</div>
+      <div className="pointer-events-none absolute bottom-2 left-2 right-2 text-[11px] text-text-3">Shown on 2-bromobutane, whose stereocentre makes the inversion visible. Drag to turn it.</div>
     </div>
   );
 }
