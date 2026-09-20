@@ -26,6 +26,14 @@ const browser = await chromium.launch({
 async function fresh({ width = 1440, height = 900, scale = 2, theme = 'dark' } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, colorScheme: theme });
   const page = await ctx.newPage();
+  // Screenshot runs are not visitors either.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('orbital:analytics', 'off');
+    } catch {
+      /* ignore */
+    }
+  });
   await page.goto(BASE + '/');
   await page.waitForFunction(() => window.__orbitalActions, null, { timeout: 30000 });
   // Skip first-run coaching so every scene shows the studio itself.

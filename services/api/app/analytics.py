@@ -170,6 +170,7 @@ def compute() -> dict[str, Any]:
         },
         "samples": {"timeToFirstMolecule": len(ttfm), "nameInputs": total_inputs, "namedStructures": verified + unsupported, "hintedAnswers": hinted_answers},
         "people": {
+            "since": min((p["first"] for p in people.values() if p["first"]), default=None),
             "known": len(people),
             "active7": active_since(7),
             "active30": active_since(30),

@@ -34,7 +34,22 @@ function sessionId(): string {
   }
 }
 
+/**
+ * Test runs and scripted browsers would otherwise show up as a crowd of one-visit strangers:
+ * every automated context starts with empty storage, so each one looks like a new person.
+ * `navigator.webdriver` is set by Playwright, Puppeteer and Selenium; the flag is for anything
+ * else (our own e2e runner sets it before the page loads).
+ */
+function automated(): boolean {
+  try {
+    return navigator.webdriver === true || localStorage.getItem('orbital:analytics') === 'off';
+  } catch {
+    return typeof navigator !== 'undefined' && navigator.webdriver === true;
+  }
+}
+
 export function track(name: string, props: Record<string, string | number | boolean> = {}): void {
+  if (automated()) return;
   queue.push({ name, at: Date.now() / 1000, props });
   clearTimeout(timer);
   timer = setTimeout(flush, 2000);

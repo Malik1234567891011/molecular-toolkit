@@ -43,6 +43,17 @@ const state = (page) => page.evaluate(() => {
   };
 });
 
+/** Tests must never land in the product metrics: set the opt-out before any page script runs. */
+async function silenceAnalytics(pageOrContext) {
+  await pageOrContext.addInitScript(() => {
+    try {
+      localStorage.setItem('orbital:analytics', 'off');
+    } catch {
+      /* private mode: navigator.webdriver still covers us */
+    }
+  });
+}
+
 async function openStudio(page, { fresh = true } = {}) {
   if (fresh) {
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
@@ -385,6 +396,7 @@ test('rooms: a second student joins and sees the molecule and chat', async (page
   await page.click('[data-testid=room-panel] button[type=submit]');
   await page.waitForSelector('[data-testid=room-status]:has-text("connected")', { timeout: 15000 });
   const other = await page.context().browser().newContext({ viewport: { width: 1200, height: 800 } });
+  await silenceAnalytics(other);
   const p2 = await other.newPage();
   try {
     await p2.goto(`${BASE}/?room=${roomId}`);
@@ -435,6 +447,7 @@ let failed = 0;
 const selected = tests.filter((t) => !filter || filter.test(t.name));
 for (const t of selected) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await silenceAnalytics(context); // tests are not people
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

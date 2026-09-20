@@ -17,6 +17,7 @@ interface Metrics {
   samples: Record<string, number>;
   funnel: Array<{ step: string; sessions: number }>;
   people: {
+    since: number | null;
     known: number;
     active7: number;
     active30: number;
@@ -108,7 +109,8 @@ export function MetricsDashboard() {
                   )}
                 </p>
                 <p className="mt-1 text-[11.5px] text-text-3">
-                  A person is one browser on one device: a random id in that browser, no account and no name. Clearing site data, or switching device, counts as someone new.
+                  A person is one browser on one device: a random id in that browser, no account and no name. Clearing site data, or switching device, counts as someone new. Automated browsers (our own tests, scripted visits) are not counted at all.
+                  {m.people.since && <> Counting since {new Date(m.people.since * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.</>}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
