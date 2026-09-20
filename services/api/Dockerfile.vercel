@@ -1,22 +1,43 @@
 # Orbital chemistry API as a Vercel container function (vercel.json → services.api).
 # RDKit, PySCF and a JVM for OPSIN don't fit a plain Python function, so this image carries them.
 # Stateless: everything durable goes to Redis (app/store.py) because instances scale to zero.
+#
+# Every deployment that rebuilds this stores another copy of the image, and the free tier counts
+# it, so the image is kept as small as it can be while still being the same software: a cut-down
+# Java runtime instead of a whole JRE, stripped native libraries, and no test suites or caches.
 
 FROM eclipse-temurin:21-jdk AS opsin
 WORKDIR /opsin
 ADD https://github.com/dan2097/opsin/releases/download/2.9.0/opsin-core-2.9.0-jar-with-dependencies.jar ./
 COPY opsin/OpsinBridge.java ./
 RUN mkdir classes && javac -cp opsin-core-2.9.0-jar-with-dependencies.jar -d classes OpsinBridge.java
+# OPSIN needs a handful of JDK modules; jlink builds a runtime with only those (~50 MB, not ~180).
+RUN jlink --add-modules java.base,java.logging,java.xml,java.desktop,jdk.zipfs \
+      --strip-debug --no-header-files --no-man-pages --compress=zip-9 --output /javaruntime
+
+FROM python:3.12-slim AS deps
+# Native wheels ship with debug symbols; stripping them halves RDKit, SciPy and NumPy.
+RUN apt-get update && apt-get install -y --no-install-recommends binutils && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --no-compile -r requirements.txt \
+ && find /usr/local/lib/python3.12/site-packages -name '*.so' -exec strip --strip-unneeded {} + 2>/dev/null || true
+# Test suites, headers and caches ride along in the wheels and are never used at runtime.
+RUN find /usr/local/lib/python3.12/site-packages \
+      \( -type d -name tests -o -type d -name test -o -type d -name __pycache__ -o -name '*.pyc' -o -name '*.pyi' \) \
+      -prune -exec rm -rf {} + 2>/dev/null || true
 
 FROM python:3.12-slim
 # RDKit's drawing code links against these X libraries even when rendering off-screen.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libxrender1 libxext6 \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=eclipse-temurin:21-jre /opt/java/openjdk /opt/java/openjdk
+COPY --from=opsin /javaruntime /opt/java/openjdk
+COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 ENV JAVA_HOME=/opt/java/openjdk \
     PATH=/opt/java/openjdk/bin:$PATH \
     PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     ORBITAL_DATA_DIR=/tmp/orbital \
     OPSIN_DIR=/app/opsin \
     OMP_NUM_THREADS=1 \
@@ -24,8 +45,6 @@ ENV JAVA_HOME=/opt/java/openjdk \
     ORBITAL_QUANTUM_MAX_NAO_B3LYP=235
 
 WORKDIR /app
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
 COPY --from=opsin /opsin/opsin-core-2.9.0-jar-with-dependencies.jar /app/opsin/
 COPY --from=opsin /opsin/classes /app/opsin/classes
 COPY app ./app

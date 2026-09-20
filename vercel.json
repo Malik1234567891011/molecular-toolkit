@@ -4,21 +4,46 @@
     "web": {
       "root": "apps/web",
       "framework": "nextjs",
-      "bindings": [{ "type": "service", "service": "api", "format": "url", "env": "ORBITAL_API_URL" }]
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "ORBITAL_API_URL"
+        }
+      ],
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/web packages package-lock.json package.json"
     },
     "api": {
       "root": "services/api",
       "runtime": "container",
-      "entrypoint": "Dockerfile.vercel"
+      "entrypoint": "Dockerfile.vercel",
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- services/api"
     },
     "rooms": {
       "root": "services/rooms",
-      "entrypoint": "server.mjs"
+      "entrypoint": "server.mjs",
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- services/rooms package-lock.json"
     }
   },
   "rewrites": [
-    { "source": "/api/v1/(.*)", "destination": { "service": "api" } },
-    { "source": "/rooms/(.*)", "destination": { "service": "rooms" } },
-    { "source": "/(.*)", "destination": { "service": "web" } }
+    {
+      "source": "/api/v1/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/rooms/(.*)",
+      "destination": {
+        "service": "rooms"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
   ]
 }
