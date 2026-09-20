@@ -42,7 +42,10 @@ function sessionId(): string {
  */
 function automated(): boolean {
   try {
-    return navigator.webdriver === true || localStorage.getItem('orbital:analytics') === 'off';
+    // 'force' is how the analytics test itself proves the pipeline works, locally.
+    const flag = localStorage.getItem('orbital:analytics');
+    if (flag === 'force') return false;
+    return navigator.webdriver === true || flag === 'off';
   } catch {
     return typeof navigator !== 'undefined' && navigator.webdriver === true;
   }

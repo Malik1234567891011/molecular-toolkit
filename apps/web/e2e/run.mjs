@@ -411,10 +411,17 @@ test('rooms: a second student joins and sees the molecule and chat', async (page
 });
 
 test('metrics: counts people, not just visits', async (page) => {
+  // This is the one test that has to be counted, so it opts back in explicitly — and only
+  // against a local server, so a run against production never invents visitors there.
+  if (!/localhost|127\.0\.0\.1/.test(BASE)) return;
+  await page.addInitScript(() => localStorage.setItem('orbital:analytics', 'force'));
   // Two "people" on one machine: a fresh browser profile each time.
   for (const who of ['visitor-one', 'visitor-two']) {
     await openStudio(page);
-    await page.evaluate((v) => localStorage.setItem('orbital:visitor', v), who);
+    await page.evaluate((v) => {
+      localStorage.setItem('orbital:visitor', v);
+      localStorage.setItem('orbital:analytics', 'force');
+    }, who);
     await resolve(page, 'ethanol');
     await waitState(page, () => window.__orbital.getState().doc.atoms.length === 3);
     await page.waitForTimeout(2500); // the analytics queue flushes on a timer
