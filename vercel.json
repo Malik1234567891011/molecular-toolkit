@@ -12,18 +12,18 @@
           "env": "ORBITAL_API_URL"
         }
       ],
-      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/web packages package-lock.json package.json"
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':/apps/web' ':/packages' ':/package-lock.json' ':/package.json'"
     },
     "api": {
       "root": "services/api",
       "runtime": "container",
       "entrypoint": "Dockerfile.vercel",
-      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- services/api"
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':/services/api'"
     },
     "rooms": {
       "root": "services/rooms",
       "entrypoint": "server.mjs",
-      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- services/rooms package-lock.json"
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':/services/rooms' ':/package-lock.json'"
     }
   },
   "rewrites": [

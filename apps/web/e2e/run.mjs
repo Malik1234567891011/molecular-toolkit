@@ -407,14 +407,23 @@ test('metrics: counts people, not just visits', async (page) => {
     await waitState(page, () => window.__orbital.getState().doc.atoms.length === 3);
     await page.waitForTimeout(2500); // the analytics queue flushes on a timer
   }
-  await page.goto(BASE + '/metrics');
+  const key = process.env.E2E_METRICS_KEY;
+  await page.goto(BASE + '/metrics' + (key ? `?key=${encodeURIComponent(key)}` : ''));
+  if (!key && (await page.$('text=/private/i'))) return; // locked in production without a key
   await page.waitForSelector('text=People, not visits');
   const roster = await page.$$eval('table tbody tr', (rows) => rows.length);
   assert(roster >= 2, `roster had ${roster} rows`);
 });
 
 test('metrics: dashboard loads headline numbers', async (page) => {
-  await page.goto(BASE + '/metrics');
+  // Hosted, the dashboard is private (ORBITAL_METRICS_KEY): pass E2E_METRICS_KEY to see it,
+  // otherwise all we can check is that it refuses politely instead of leaking the numbers.
+  const key = process.env.E2E_METRICS_KEY;
+  await page.goto(BASE + '/metrics' + (key ? `?key=${encodeURIComponent(key)}` : ''));
+  if (!key && (await page.waitForSelector('text=/private/i', { timeout: 20000 }).catch(() => null))) {
+    assert(!(await page.isVisible('text=Median time to first molecule')), 'locked dashboard showed numbers');
+    return;
+  }
   await page.waitForSelector('text=Median time to first molecule', { timeout: 20000 });
   assert(await page.isVisible('text=Where sessions get to'), 'funnel');
 });
