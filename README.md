@@ -80,10 +80,11 @@ key is under `orbital:`. Without `REDIS_URL` — local dev — the API uses SQLi
 `services/api/data` and rooms stay in memory. Quantum jobs run inside the submit request when
 hosted, so they must finish within the function limit (5 minutes on Hobby).
 
-Every deployment that rebuilds a service stores its output, and the free tier counts the total
-(10 GB "Functions Storage"); the API container is the big one, so each service only rebuilds
-when its own files change (`ignoreCommand` in `vercel.json`) and old images are pruned with
-`node scripts/prune-images.mjs --yes` (keeps the newest three).
+Every deployment stores its own copy of every service, and the free tier counts the total
+(10 GB). The API container is the whole story — 206 MB a build, against under 1 MB for the web
+and rooms functions — and Vercel's services beta ignores the per-service `ignoreCommand`, so
+each push rebuilds it. Run `npm run prune` after a run of deploys: it keeps the newest three
+images and the deployment the live domain points at, and deletes the rest.
 
 Hobby includes 4 Active-CPU hours, 360 GB-hours of memory and 1M requests a month. A quantum
 job is the only heavy thing here: about 7 s of CPU for HF/STO-3G on a 33-atom molecule, ~75 s

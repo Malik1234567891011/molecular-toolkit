@@ -14,7 +14,8 @@
     "test": "npm run test -w @orbital/chem",
     "typecheck": "npm run typecheck -w @orbital/chem && npm run typecheck -w @orbital/web",
     "corpus": "npm run corpus -w @orbital/chem",
-    "e2e": "npm run e2e -w @orbital/web"
+    "e2e": "npm run e2e -w @orbital/web",
+    "prune": "node scripts/prune-images.mjs --deployments --yes"
   },
   "engines": {
     "node": ">=22"

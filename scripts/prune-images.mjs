@@ -5,9 +5,11 @@
  * Every deployment that rebuilds the API stores another ~200 MB image, and the free tier counts
  * the lot (10 GB). Keeping the live one plus a couple to roll back to is enough.
  *
- *   node scripts/prune-images.mjs          # show what would go
- *   node scripts/prune-images.mjs --yes    # delete them
+ *   node scripts/prune-images.mjs                     # show what would go
+ *   node scripts/prune-images.mjs --yes               # delete them
  *   node scripts/prune-images.mjs --keep 5 --yes
+ *   node scripts/prune-images.mjs --deployments --yes # also delete every deployment that
+ *                                                     # isn't the one serving the live site
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -52,4 +54,13 @@ for (const i of doomed) {
   } catch (e) {
     console.error(`could not delete ${i.id}: ${String(e.message).split('\n')[0]}`);
   }
+}
+
+// Old deployments keep their own copy of every function, which is the other half of the bill.
+// --safe leaves the deployment the live domain points at, so production is never touched.
+if (args.includes('--deployments')) {
+  console.log('\nRemoving deployments that are not serving the live site…');
+  const out = vercelText('remove', 'molecular-toolkit', '--safe', '--yes');
+  const removed = (out.match(/^- \S+$/gm) ?? []).length;
+  console.log(`  ${removed} deployment${removed === 1 ? '' : 's'} removed`);
 }
